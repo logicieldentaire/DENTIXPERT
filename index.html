@@ -220,7 +220,6 @@ textarea.inp{resize:vertical;min-height:64px;}
 
 
 <script>
-/* ===== p0_supa ===== */
 /* ════════ SUPABASE CLIENT ════════ */
 const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
@@ -228,13 +227,13 @@ const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 async function loadAllData() {
   const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
-  if (rU.data?.length) USERS = rU.data;
-  if (rP.data?.length) PATIENTS = rP.data;
-  if (rA.data?.length) ACTES_NOM = rA.data.map(a => ({
+  if (rU.data) USERS = rU.data;
+  if (rP.data) PATIENTS = rP.data;
+  if (rA.data) ACTES_NOM = rA.data.map(a => ({
     ...a,
     dentsRequises: a.dents_requises
   }));
-  if (rPl.data?.length) {
+  if (rPl.data) {
     PLANS = rPl.data;
     PLANS.forEach(pl => {
       pl.lignes = (rPll.data || []).filter(l => l.plan_id === pl.id).map(l => ({
@@ -245,15 +244,15 @@ async function loadAllData() {
       }));
     });
   }
-  if (rPay.data?.length) PAIEMENTS = rPay.data.map(p => ({
+  if (rPay.data) PAIEMENTS = rPay.data.map(p => ({
     ...p,
     plan: p.plan_id
   }));
-  if (rPA.data?.length) PROTH_ACTES_CAT = rPA.data.map(a => ({
+  if (rPA.data) PROTH_ACTES_CAT = rPA.data.map(a => ({
     ...a,
     dentsRequises: a.dents_requises
   }));
-  if (rPr.data?.length) {
+  if (rPr.data) {
     PROTHESISTES = rPr.data.map(pr => ({
       ...pr,
       prix: {}
@@ -263,15 +262,15 @@ async function loadAllData() {
       if (pr) pr.prix[t.acte_id] = t.prix;
     });
   }
-  if (rPTr.data?.length) PROTH_TRAVAUX = rPTr.data.map(t => ({
+  if (rPTr.data) PROTH_TRAVAUX = rPTr.data.map(t => ({
     ...t,
     payeLabo: t.paye_labo,
     prixPatient: t.prix_patient,
     coutLabo: t.cout_labo
   }));
-  if (rR.data?.length) RDV = rR.data;
-  if (rM.data?.length) MUT_DECLAREES = rM.data;
-  if (rD.data?.length) {
+  if (rR.data) RDV = rR.data;
+  if (rM.data) MUT_DECLAREES = rM.data;
+  if (rD.data) {
     DENTS_STATUT = {};
     rD.data.forEach(d => {
       if (!DENTS_STATUT[d.patient_id]) DENTS_STATUT[d.patient_id] = {};
@@ -575,8 +574,6 @@ const db = {
     }).catch(() => {});
   }
 };
-
-/* ===== p0_icons ===== */
 const ICONS = {
   "alert-circle": "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 8v4\" /><path d=\"M12 16h.01\" />",
   "alert-triangle": "<path d=\"M12 9v4\" /><path d=\"M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0\" /><path d=\"M12 16h.01\" />",
@@ -671,7 +668,6 @@ const ICONS = {
   "screw": "<path d=\"M19.875 6.27a2.225 2.225 0 0 1 1.125 1.948v7.284c0 .809 -.443 1.555 -1.158 1.948l-6.75 4.27a2.269 2.269 0 0 1 -2.184 0l-6.75 -4.27a2.225 2.225 0 0 1 -1.158 -1.948v-7.285c0 -.809 .443 -1.554 1.158 -1.947l6.75 -3.98a2.33 2.33 0 0 1 2.25 0l6.75 3.98h-.033\" /><path d=\"M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0\" />",
   "armchair": "<path d=\"M5 10v-4a3 3 0 0 1 3 -3h8a3 3 0 0 1 3 3v4\" /><path d=\"M16 15v-2a3 3 0 1 1 3 3v3h-14v-3a3 3 0 1 1 3 -3v2\" /><path d=\"M8 12h8\" /><path d=\"M7 19v2\" /><path d=\"M17 19v2\" />"
 };
-/* ===== p1 ===== */
 const {
   useState,
   useEffect,
@@ -1535,8 +1531,6 @@ function weekDates(iso) {
     return x.toISOString().slice(0, 10);
   });
 }
-
-/* ===== p2 ===== */
 const AppCtx = createContext(null);
 const useApp = () => useContext(AppCtx);
 function Avatar({
@@ -1849,8 +1843,6 @@ function PeriodFilter({
     }
   })));
 }
-
-/* ===== p3 ===== */
 function Login({
   onLogin
 }) {
@@ -2159,8 +2151,6 @@ function Topbar({
     color: user.couleur
   })));
 }
-
-/* ===== p4 ===== */
 function WeekMini() {
   const days = weekDates(TODAY);
   return /*#__PURE__*/React.createElement("div", {
@@ -2606,7 +2596,6 @@ function Dashboard() {
   }))));
 }
 
-/* ===== p5 ===== */
 /* ════════ SCHÉMA DENTAIRE SVG ILLUSTRÉ ════════ */
 // Forme de base de la dent (viewBox 0 0 28 44)
 // Couronne: partie haute arrondie (y 0-24)
@@ -3481,8 +3470,6 @@ function PatientsList() {
     onClose: () => setModal(false)
   }));
 }
-
-/* ===== p6 ===== */
 function PlanModal({
   patientId,
   onClose
@@ -4262,8 +4249,6 @@ function PatientDetail({
     onClose: () => setPayModal(false)
   }));
 }
-
-/* ===== p7 ===== */
 function SaisieJour() {
   const {
     user,
@@ -4977,8 +4962,6 @@ function Agenda() {
     value: "urgence"
   }, "Urgence")))));
 }
-
-/* ===== p8 ===== */
 function Prothese() {
   const {
     user,
@@ -5772,7 +5755,6 @@ function LabosGestion() {
   }))))));
 }
 
-/* ===== p9 ===== */
 /* ════════ FINANCES ════════ */
 function Finances() {
   const [tab, setTab] = useState('jour');
@@ -6558,8 +6540,6 @@ function Stats() {
     }
   }, fmtMAD(p.paye)))))))));
 }
-
-/* ===== p10 ===== */
 function Historique() {
   const {
     user,
@@ -7037,7 +7017,14 @@ function LoadingScreen() {
   }, "Chargement des donn\xE9es\u2026"), /*#__PURE__*/React.createElement("style", null, `@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}`));
 }
 function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const s = sessionStorage.getItem('dx_user');
+      return s ? JSON.parse(s) : null;
+    } catch {
+      return null;
+    }
+  });
   const [appLoading, setAppLoading] = useState(true);
   const [dbOk, setDbOk] = useState(true);
   const [page, setPage] = useState('dashboard');
@@ -7104,6 +7091,9 @@ function App() {
     setDelStep(1);
   };
   const logout = () => {
+    try {
+      sessionStorage.removeItem('dx_user');
+    } catch {}
     setUser(null);
     setPage('dashboard');
   };
@@ -7131,6 +7121,9 @@ function App() {
   if (appLoading) return /*#__PURE__*/React.createElement(LoadingScreen, null);
   if (!user) return /*#__PURE__*/React.createElement(Login, {
     onLogin: u => {
+      try {
+        sessionStorage.setItem('dx_user', JSON.stringify(u));
+      } catch {}
       setUser(u);
       addNotif('login', 'Connexion', u.prenom + ' ' + u.nom + ' connecté');
       HISTORIQUE.unshift({
