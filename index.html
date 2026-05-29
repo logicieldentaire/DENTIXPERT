@@ -1846,6 +1846,24 @@ function PeriodFilter({
 function Login({
   onLogin
 }) {
+  const [email, setEmail] = useState('');
+  const [pwd, setPwd] = useState('');
+  const [show, setShow] = useState(false);
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const submit = () => {
+    setErr('');
+    setLoading(true);
+    setTimeout(() => {
+      const u = USERS.find(x => x.email.toLowerCase() === email.trim().toLowerCase() && x.motdepasse === pwd);
+      if (u) {
+        onLogin(u);
+      } else {
+        setErr('Email ou mot de passe incorrect.');
+      }
+      setLoading(false);
+    }, 400);
+  };
   return /*#__PURE__*/React.createElement("div", {
     className: "login-wrap"
   }, /*#__PURE__*/React.createElement("div", {
@@ -1860,55 +1878,76 @@ function Login({
     className: "sub"
   }, "Gestion de cabinet dentaire"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 12,
-      fontWeight: 600,
-      color: '#777',
-      marginBottom: 6
+      marginTop: 24,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12
     }
-  }, "Choisissez un compte :"), /*#__PURE__*/React.createElement("div", {
-    className: "role-pick"
-  }, USERS.map(u => {
-    const r = ROLES[u.role];
-    return /*#__PURE__*/React.createElement("button", {
-      key: u.id,
-      className: "role-opt",
-      onClick: () => onLogin(u)
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "role-opt-ic",
-      style: {
-        background: r.bg,
-        color: r.color
-      }
-    }, /*#__PURE__*/React.createElement(Icon, {
-      n: r.icon,
-      size: 20
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "role-opt-t"
-    }, u.role === 'assistante' ? u.prenom + ' ' + u.nom : 'Dr. ' + u.prenom + ' ' + u.nom), /*#__PURE__*/React.createElement("div", {
-      className: "role-opt-d"
-    }, u.email)), /*#__PURE__*/React.createElement(Icon, {
-      n: "arrow-right",
-      size: 18,
-      color: "#bbb"
-    }));
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fld"
+  }, /*#__PURE__*/React.createElement("label", null, "Email"), /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "email",
+    placeholder: "votre@email.ma",
+    value: email,
+    onChange: e => {
+      setEmail(e.target.value);
+      setErr('');
+    },
+    onKeyDown: e => e.key === 'Enter' && submit()
   })), /*#__PURE__*/React.createElement("div", {
+    className: "fld"
+  }, /*#__PURE__*/React.createElement("label", null, "Mot de passe"), /*#__PURE__*/React.createElement("div", {
+    className: "pwd-wrap"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: show ? 'text' : 'password',
+    placeholder: "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
+    value: pwd,
+    onChange: e => {
+      setPwd(e.target.value);
+      setErr('');
+    },
+    onKeyDown: e => e.key === 'Enter' && submit()
+  }), /*#__PURE__*/React.createElement(Icon, {
+    n: show ? 'eye-off' : 'eye',
+    size: 18,
+    className: "pwd-eye",
+    onClick: () => setShow(s => !s)
+  }))), err && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 22,
-      padding: '10px 14px',
-      background: '#F0FDF4',
-      borderRadius: 9,
-      fontSize: 11.5,
-      color: '#176B3A',
-      textAlign: 'center'
+      background: '#FEE2E2',
+      color: '#b91c1c',
+      borderRadius: 8,
+      padding: '9px 13px',
+      fontSize: 13,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Icon, {
-    n: "info-circle",
-    size: 14
-  }), " Maquette de d\xE9monstration \xB7 donn\xE9es simul\xE9es")));
+    n: "alert-circle",
+    size: 15
+  }), err), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-pri",
+    style: {
+      width: '100%',
+      justifyContent: 'center',
+      marginTop: 4,
+      height: 44,
+      fontSize: 15
+    },
+    onClick: submit,
+    disabled: !email || !pwd || loading
+  }, loading ? /*#__PURE__*/React.createElement(Icon, {
+    n: "loader-2",
+    size: 18,
+    color: "#fff"
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Icon, {
+    n: "login",
+    size: 18,
+    color: "#fff"
+  }), " Se connecter")))));
 }
 const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
 function canAccess(user, permKey) {
@@ -1930,6 +1969,97 @@ const PAGE_TITLES = {
   historique: 'Historique',
   settings: 'Réglages'
 };
+function AccountSwitcher() {
+  const {
+    user,
+    switchUser
+  } = useApp();
+  const [open, setOpen] = useState(false);
+  if (user.role !== 'admin') return null;
+  const others = USERS.filter(u => u.id !== user.id);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    },
+    onBlur: () => setTimeout(() => setOpen(false), 150)
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-sec btn-sm",
+    onClick: () => setOpen(o => !o),
+    style: {
+      gap: 6,
+      fontSize: 12
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "switch-horizontal",
+    size: 14
+  }), " Changer compte"), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      bottom: '110%',
+      left: 0,
+      background: '#fff',
+      border: '1px solid #eee',
+      borderRadius: 12,
+      boxShadow: '0 4px 20px rgba(0,0,0,.12)',
+      minWidth: 200,
+      zIndex: 999,
+      padding: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#999',
+      padding: '6px 10px',
+      fontWeight: 600
+    }
+  }, "SE CONNECTER EN TANT QUE"), others.map(u => {
+    const r = ROLES[u.role];
+    return /*#__PURE__*/React.createElement("button", {
+      key: u.id,
+      onMouseDown: () => {
+        switchUser(u);
+        setOpen(false);
+      },
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '9px 10px',
+        width: '100%',
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        borderRadius: 8,
+        textAlign: 'left'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 30,
+        height: 30,
+        borderRadius: '50%',
+        background: r.bg,
+        color: r.color,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      n: r.icon,
+      size: 15
+    })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, u.role === 'assistante' ? u.prenom : u.prenom + ' ' + u.nom), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 11,
+        color: '#999'
+      }
+    }, r.label)));
+  })));
+}
 function Sidebar({
   page,
   setPage
@@ -1979,7 +2109,11 @@ function Sidebar({
       background: r.bg,
       color: r.color
     }
-  }, r.label)), /*#__PURE__*/React.createElement("button", {
+  }, r.label)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement(AccountSwitcher, null)), /*#__PURE__*/React.createElement("button", {
     className: "sb-logout",
     onClick: logout,
     title: "D\xE9connexion"
@@ -7097,6 +7231,14 @@ function App() {
     setUser(null);
     setPage('dashboard');
   };
+  const switchUser = u => {
+    try {
+      sessionStorage.setItem('dx_user', JSON.stringify(u));
+    } catch {}
+    setUser(u);
+    setPage('dashboard');
+  };
+  ;
   const ctx = {
     user,
     setPage,
@@ -7107,6 +7249,7 @@ function App() {
     markRead,
     confirmDelete,
     logout,
+    switchUser,
     logAction,
     refresh
   };
