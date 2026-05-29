@@ -7122,13 +7122,13 @@ function App() {
   };
 
   // Injecter CSS dent v2
-  if (appLoading) return /*#__PURE__*/React.createElement(LoadingScreen, null);
   useEffect(() => {
     const s = document.createElement('style');
     s.textContent = EXTRA_CSS;
     document.head.appendChild(s);
     return () => s.remove();
   }, []);
+  if (appLoading) return /*#__PURE__*/React.createElement(LoadingScreen, null);
   if (!user) return /*#__PURE__*/React.createElement(Login, {
     onLogin: u => {
       setUser(u);
