@@ -213,11 +213,369 @@ textarea.inp{resize:vertical;min-height:64px;}
 .status-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:.1s;}
 .status-btn:hover{filter:brightness(.95);transform:translateY(-1px);}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <div id="root"></div>
 
+
 <script>
+/* ===== p0_supa ===== */
+/* ════════ SUPABASE CLIENT ════════ */
+const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
+const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+async function loadAllData() {
+  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*')]);
+  if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
+  if (rU.data?.length) USERS = rU.data;
+  if (rP.data?.length) PATIENTS = rP.data;
+  if (rA.data?.length) ACTES_NOM = rA.data.map(a => ({
+    ...a,
+    dentsRequises: a.dents_requises
+  }));
+  if (rPl.data?.length) {
+    PLANS = rPl.data;
+    PLANS.forEach(pl => {
+      pl.lignes = (rPll.data || []).filter(l => l.plan_id === pl.id).map(l => ({
+        acte: l.acte,
+        label: l.label,
+        dents: l.dents || '',
+        prix: l.prix || 0
+      }));
+    });
+  }
+  if (rPay.data?.length) PAIEMENTS = rPay.data.map(p => ({
+    ...p,
+    plan: p.plan_id
+  }));
+  if (rPA.data?.length) PROTH_ACTES_CAT = rPA.data.map(a => ({
+    ...a,
+    dentsRequises: a.dents_requises
+  }));
+  if (rPr.data?.length) {
+    PROTHESISTES = rPr.data.map(pr => ({
+      ...pr,
+      prix: {}
+    }));
+    (rPT.data || []).forEach(t => {
+      const pr = PROTHESISTES.find(p => p.id === t.prothesiste_id);
+      if (pr) pr.prix[t.acte_id] = t.prix;
+    });
+  }
+  if (rPTr.data?.length) PROTH_TRAVAUX = rPTr.data.map(t => ({
+    ...t,
+    payeLabo: t.paye_labo,
+    prixPatient: t.prix_patient,
+    coutLabo: t.cout_labo
+  }));
+  if (rR.data?.length) RDV = rR.data;
+  if (rM.data?.length) MUT_DECLAREES = rM.data;
+  if (rD.data?.length) {
+    DENTS_STATUT = {};
+    rD.data.forEach(d => {
+      if (!DENTS_STATUT[d.patient_id]) DENTS_STATUT[d.patient_id] = {};
+      DENTS_STATUT[d.patient_id][d.num] = d.statut;
+    });
+  }
+}
+
+/* ════════ DB WRITE HELPERS ════════ */
+const db = {
+  err(e, ctx) {
+    if (e) console.error('db.' + ctx, e.message);
+  },
+  async addPatient(p) {
+    const {
+      error
+    } = await SUPA.from('dx_patients').insert({
+      id: p.id,
+      nom: p.nom,
+      prenom: p.prenom,
+      naissance: p.naissance || '',
+      genre: p.genre || 'M',
+      tel: p.tel || '',
+      email: p.email || '',
+      adresse: p.adresse || '',
+      cin: p.cin || '',
+      mutuelle: p.mutuelle || 'Aucune',
+      risque: !!p.risque,
+      maladie: p.maladie || '',
+      allergie: p.allergie || '',
+      creele: p.creele || ''
+    });
+    this.err(error, 'addPatient');
+  },
+  async updatePatient(p) {
+    const {
+      error
+    } = await SUPA.from('dx_patients').update({
+      nom: p.nom,
+      prenom: p.prenom,
+      naissance: p.naissance || '',
+      genre: p.genre || 'M',
+      tel: p.tel || '',
+      email: p.email || '',
+      adresse: p.adresse || '',
+      cin: p.cin || '',
+      mutuelle: p.mutuelle || 'Aucune',
+      risque: !!p.risque,
+      maladie: p.maladie || '',
+      allergie: p.allergie || ''
+    }).eq('id', p.id);
+    this.err(error, 'updatePatient');
+  },
+  async addPlan(pl) {
+    const {
+      error
+    } = await SUPA.from('dx_plans').insert({
+      id: pl.id,
+      patient: pl.patient,
+      praticien: pl.praticien,
+      date: pl.date,
+      statut: pl.statut || 'en_cours'
+    });
+    this.err(error, 'addPlan');
+    if (pl.lignes?.length) {
+      const {
+        error: e2
+      } = await SUPA.from('dx_plan_lignes').insert(pl.lignes.map(l => ({
+        plan_id: pl.id,
+        acte: l.acte,
+        label: l.label,
+        dents: l.dents || '',
+        prix: l.prix || 0
+      })));
+      this.err(e2, 'addPlanLignes');
+    }
+  },
+  async addPlanLigne(planId, l) {
+    const {
+      error
+    } = await SUPA.from('dx_plan_lignes').insert({
+      plan_id: planId,
+      acte: l.acte,
+      label: l.label,
+      dents: l.dents || '',
+      prix: l.prix || 0
+    });
+    this.err(error, 'addPlanLigne');
+  },
+  async addPaiement(p) {
+    const {
+      error
+    } = await SUPA.from('dx_paiements').insert({
+      id: p.id,
+      patient: p.patient,
+      plan_id: p.plan || null,
+      acte: p.acte || null,
+      date: p.date,
+      montant: p.montant || 0,
+      mode: p.mode || 'especes',
+      par: p.par,
+      note: p.note || ''
+    });
+    this.err(error, 'addPaiement');
+  },
+  async addProthTravail(t) {
+    const {
+      error
+    } = await SUPA.from('dx_proth_travaux').insert({
+      id: t.id,
+      patient: t.patient,
+      acte: t.acte,
+      dents: t.dents || '',
+      prothesiste: t.prothesiste,
+      prix_patient: t.prixPatient || 0,
+      cout_labo: t.coutLabo || 0,
+      statut: t.statut || 'commande',
+      paye_labo: !!t.payeLabo,
+      date: t.date
+    });
+    this.err(error, 'addProthTravail');
+  },
+  async updateProthStatut(id, statut) {
+    const {
+      error
+    } = await SUPA.from('dx_proth_travaux').update({
+      statut
+    }).eq('id', id);
+    this.err(error, 'updateProthStatut');
+  },
+  async addMutuelle(m) {
+    const {
+      error
+    } = await SUPA.from('dx_mutuelles').insert({
+      id: m.id,
+      patient: m.patient,
+      mutuelle: m.mutuelle,
+      montant: m.montant || 0,
+      date: m.date,
+      par: m.par
+    });
+    this.err(error, 'addMutuelle');
+  },
+  async updateMutuelle(m) {
+    const {
+      error
+    } = await SUPA.from('dx_mutuelles').update({
+      mutuelle: m.mutuelle,
+      montant: m.montant || 0,
+      date: m.date
+    }).eq('id', m.id);
+    this.err(error, 'updateMutuelle');
+  },
+  async deleteMutuelle(id) {
+    const {
+      error
+    } = await SUPA.from('dx_mutuelles').delete().eq('id', id);
+    this.err(error, 'deleteMutuelle');
+  },
+  async upsertDentStatut(patientId, num, statut) {
+    const {
+      error
+    } = await SUPA.from('dx_dents_statut').upsert({
+      patient_id: patientId,
+      num: String(num),
+      statut
+    });
+    this.err(error, 'upsertDentStatut');
+  },
+  async addRdv(r) {
+    const {
+      error
+    } = await SUPA.from('dx_rdv').insert({
+      id: r.id,
+      patient: r.patient,
+      praticien: r.praticien,
+      date: r.date,
+      heure: r.heure,
+      duree: r.duree || 30,
+      motif: r.motif || '',
+      statut: r.statut || 'en_attente'
+    });
+    this.err(error, 'addRdv');
+  },
+  async addActe(a) {
+    const {
+      error
+    } = await SUPA.from('dx_actes').insert({
+      id: a.id,
+      nom: a.nom,
+      cat: a.cat,
+      dents_requises: !!a.dentsRequises
+    });
+    this.err(error, 'addActe');
+  },
+  async updateActe(a) {
+    const {
+      error
+    } = await SUPA.from('dx_actes').update({
+      nom: a.nom,
+      cat: a.cat,
+      dents_requises: !!a.dentsRequises
+    }).eq('id', a.id);
+    this.err(error, 'updateActe');
+  },
+  async deleteActe(id) {
+    const {
+      error
+    } = await SUPA.from('dx_actes').delete().eq('id', id);
+    this.err(error, 'deleteActe');
+  },
+  async addUser(u) {
+    const {
+      error
+    } = await SUPA.from('dx_users').insert({
+      id: u.id,
+      nom: u.nom,
+      prenom: u.prenom,
+      email: u.email,
+      motdepasse: u.motdepasse || '',
+      role: u.role,
+      couleur: u.couleur || '#176B3A',
+      actif: true
+    });
+    this.err(error, 'addUser');
+  },
+  async updateUser(u) {
+    const {
+      error
+    } = await SUPA.from('dx_users').update({
+      nom: u.nom,
+      prenom: u.prenom,
+      email: u.email,
+      motdepasse: u.motdepasse,
+      role: u.role
+    }).eq('id', u.id);
+    this.err(error, 'updateUser');
+  },
+  async deleteUser(id) {
+    const {
+      error
+    } = await SUPA.from('dx_users').delete().eq('id', id);
+    this.err(error, 'deleteUser');
+  },
+  async addProthesiste(pr) {
+    await SUPA.from('dx_prothesistes').insert({
+      id: pr.id,
+      nom: pr.nom,
+      contact: pr.contact || ''
+    });
+    const t = Object.entries(pr.prix || {}).map(([a, p]) => ({
+      prothesiste_id: pr.id,
+      acte_id: a,
+      prix: p || 0
+    }));
+    if (t.length) await SUPA.from('dx_proth_tarifs').insert(t);
+  },
+  async updateProthesiste(pr) {
+    await SUPA.from('dx_prothesistes').update({
+      nom: pr.nom,
+      contact: pr.contact || ''
+    }).eq('id', pr.id);
+    for (const [a, p] of Object.entries(pr.prix || {})) {
+      await SUPA.from('dx_proth_tarifs').upsert({
+        prothesiste_id: pr.id,
+        acte_id: a,
+        prix: parseInt(p) || 0
+      });
+    }
+  },
+  async deleteProthesiste(id) {
+    await SUPA.from('dx_proth_tarifs').delete().eq('prothesiste_id', id);
+    await SUPA.from('dx_prothesistes').delete().eq('id', id);
+  },
+  async addProthActe(a) {
+    await SUPA.from('dx_proth_actes').insert({
+      id: a.id,
+      nom: a.nom,
+      dents_requises: !!a.dentsRequises
+    });
+  },
+  async updateProthActe(a) {
+    await SUPA.from('dx_proth_actes').update({
+      nom: a.nom,
+      dents_requises: !!a.dentsRequises
+    }).eq('id', a.id);
+  },
+  async deleteProthActe(id) {
+    await SUPA.from('dx_proth_actes').delete().eq('id', id);
+    await SUPA.from('dx_proth_tarifs').delete().eq('acte_id', id);
+  },
+  async addHistorique(h) {
+    await SUPA.from('dx_historique').insert({
+      id: h.id,
+      t: h.t,
+      user_id: h.user,
+      action: h.action,
+      type: h.type,
+      detail: h.detail,
+      entite: h.entite || ''
+    }).catch(() => {});
+  }
+};
+
 /* ===== p0_icons ===== */
 const ICONS = {
   "alert-circle": "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 8v4\" /><path d=\"M12 16h.01\" />",
@@ -2478,6 +2836,7 @@ function Odontogram({
     };
     setStatuts(next);
     DENTS_STATUT[patientId] = next;
+    db.upsertDentStatut(patientId, num, st).catch(() => {});
     setSel(null);
     logAction('Schéma dentaire', 'update', 'Dent ' + num + ' → ' + STATUT_DENTS[st].label, 'dent');
     toast('Dent ' + num + ' → ' + STATUT_DENTS[st].label, 'success');
@@ -2854,11 +3213,13 @@ function PatientForm({
       className: "btn btn-pri",
       disabled: !f.nom || !f.prenom,
       onClick: () => {
-        PATIENTS.push({
+        const np = {
           id: 'p' + Date.now(),
           ...f,
           creele: TODAY
-        });
+        };
+        PATIENTS.push(np);
+        db.addPatient(np).catch(() => {});
         logAction('Nouveau patient', 'create', 'Patient ' + f.prenom + ' ' + f.nom + ' créé', 'patient');
         toast('Patient créé', 'success');
         refresh();
@@ -3161,7 +3522,7 @@ function PlanModal({
       disabled: total === 0,
       onClick: () => {
         const id = 'pl' + Date.now();
-        PLANS.push({
+        const newPlan = {
           id,
           patient: patientId,
           praticien: user.id,
@@ -3173,7 +3534,9 @@ function PlanModal({
             dents: l.dents,
             prix: parseInt(l.prix) || 0
           }))
-        });
+        };
+        PLANS.push(newPlan);
+        db.addPlan(newPlan).catch(() => {});
         logAction('Nouveau plan', 'create', 'Plan ' + fmtMAD(total) + ' — ' + pName(patientId), 'plan');
         toast('Plan créé', 'success');
         refresh();
@@ -3307,7 +3670,7 @@ function PayModal({
       className: "btn btn-pri",
       onClick: () => {
         const m = parseInt(montant) || 0;
-        PAIEMENTS.push({
+        const np = {
           id: 'pay' + Date.now(),
           patient: patientId,
           plan: plan || null,
@@ -3317,9 +3680,11 @@ function PayModal({
           mode,
           par: user.id,
           note: note || acteName(acte)
-        });
+        };
+        PAIEMENTS.push(np);
+        db.addPaiement(np).catch(() => {});
         logAction('Paiement', 'create', pName(patientId) + ' — ' + acteName(acte) + ' — ' + fmtMAD(m), 'paiement');
-        toast(m === 0 ? 'Visite enregistrée (rien payé)' : 'Paiement de ' + fmtMAD(m) + ' enregistré', 'success');
+        toast(m === 0 ? 'Visite enregistrée' : 'Paiement de ' + fmtMAD(m) + ' enregistré', 'success');
         refresh();
         onClose();
       }
@@ -3375,7 +3740,7 @@ function PayModal({
       color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
     }
   }, fmtMAD(fin.reste)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Acte r\xE9alis\xE9 lors de cette visite",
+    label: "Acte r\xE9alis\xE9",
     req: true
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
@@ -3396,7 +3761,7 @@ function PayModal({
     key: pl.id,
     value: pl.id
   }, planLabel(pl), " \u2014 ", fmtMAD(planTotal(pl)))))), /*#__PURE__*/React.createElement(Field, {
-    label: "Montant pay\xE9 aujourd'hui (MAD)"
+    label: "Montant pay\xE9 (MAD)"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "number",
@@ -3420,16 +3785,7 @@ function PayModal({
     placeholder: "Ex: 2e versement\u2026",
     value: note,
     onChange: e => setNote(e.target.value)
-  })), /*#__PURE__*/React.createElement("div", {
-    className: "alert-box",
-    style: {
-      background: '#EFF6FF',
-      color: '#1d4ed8'
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "info-circle",
-    size: 16
-  }), " Date : 24/05/2026. Mets 0 si venu sans payer (visite trac\xE9e)."));
+  })));
 }
 function PatientDetail({
   id
@@ -3645,7 +4001,7 @@ function PatientDetail({
   }, MUTUELLES.map(m => /*#__PURE__*/React.createElement("option", {
     key: m
   }, m)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Maladie / pathologie"
+    label: "Maladie"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     value: p.maladie,
@@ -3665,6 +4021,7 @@ function PatientDetail({
   }, /*#__PURE__*/React.createElement("option", null, "Non"), /*#__PURE__*/React.createElement("option", null, "Oui")))), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     onClick: () => {
+      db.updatePatient(p).catch(() => {});
       logAction('Modification patient', 'update', p.prenom + ' ' + p.nom + ' modifié', 'patient');
       toast('Modifications enregistrées', 'success');
     }
@@ -3759,7 +4116,7 @@ function PatientDetail({
     n: "clipboard-list",
     size: 18,
     color: "#176B3A"
-  }), " Plans de traitement"), fin.plans.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+  }), " Plans"), fin.plans.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
     icon: "clipboard-off",
     msg: "Aucun plan."
   }) : fin.plans.map(pl => {
@@ -3843,7 +4200,7 @@ function PatientDetail({
     msg: "Aucune visite"
   }) : /*#__PURE__*/React.createElement("table", {
     className: "tbl"
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Date"), /*#__PURE__*/React.createElement("th", null, "Acte r\xE9alis\xE9"), /*#__PURE__*/React.createElement("th", {
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Date"), /*#__PURE__*/React.createElement("th", null, "Acte"), /*#__PURE__*/React.createElement("th", {
     className: "num"
   }, "Pay\xE9"), /*#__PURE__*/React.createElement("th", null, "Mode"), /*#__PURE__*/React.createElement("th", null, "Par"))), /*#__PURE__*/React.createElement("tbody", null, paiements.map(e => /*#__PURE__*/React.createElement("tr", {
     key: e.id
@@ -3961,7 +4318,7 @@ function SaisieJour() {
         prix: pr
       });
     }
-    PAIEMENTS.push({
+    const sp = {
       id: 'pay' + Date.now(),
       patient: target.id,
       plan: planId,
@@ -3971,7 +4328,9 @@ function SaisieJour() {
       mode,
       par: user.id,
       note: 'Saisie du jour — ' + acteName(acte)
-    });
+    };
+    PAIEMENTS.push(sp);
+    db.addPaiement(sp).catch(() => {});
     logAction('Saisie du jour', 'create', pName(target.id) + ' — ' + acteName(acte) + ' ' + fmtMAD(pr) + ' / payé ' + fmtMAD(m), 'acte');
     toast('Acte + paiement enregistrés', 'success');
     refresh();
@@ -4326,12 +4685,14 @@ function ActesGestion() {
       className: "btn btn-pri",
       disabled: !ef.nom,
       onClick: () => {
-        ACTES_NOM.push({
+        const na = {
           id: 'ac' + Date.now(),
           nom: ef.nom,
           cat: ef.cat,
           dentsRequises: ef.dentsRequises
-        });
+        };
+        ACTES_NOM.push(na);
+        db.addActe(na).catch(() => {});
         toast('Acte ajouté', 'success');
         setAdd(false);
         refresh();
@@ -4634,6 +4995,7 @@ function Prothese() {
   const [, r] = useState(0);
   const setStatut = (t, st) => {
     t.statut = st;
+    db.updateProthStatut(t.id, st).catch(() => {});
     logAction('Statut prothèse', 'update', pActeName(t.acte) + ' — ' + pName(t.patient) + ' → ' + PROTH_STATUT[st].label, 'prothese');
     toast('Statut mis à jour : ' + PROTH_STATUT[st].label, 'success');
     setStatutFor(null);
@@ -4829,7 +5191,7 @@ function ProthModal({
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
       onClick: () => {
-        PROTH_TRAVAUX.push({
+        const nt = {
           id: 'pt' + Date.now(),
           patient,
           acte,
@@ -4840,7 +5202,9 @@ function ProthModal({
           statut: 'commande',
           payeLabo: false,
           date: TODAY
-        });
+        };
+        PROTH_TRAVAUX.push(nt);
+        db.addProthTravail(nt).catch(() => {});
         logAction('Nouvelle prothèse', 'create', pActeName(acte) + ' — ' + pName(patient), 'prothese');
         toast('Prothèse enregistrée', 'success');
         refresh();
@@ -5267,6 +5631,7 @@ function LabosGestion() {
         real.nom = edit.nom;
         real.contact = edit.contact;
         PROTH_ACTES_CAT.forEach(a => real.prix[a.id] = parseInt(edit.prix[a.id]) || 0);
+        db.updateProthesiste(real).catch(() => {});
         toast('Tarifs enregistrés', 'success');
         setEdit(null);
         r(x => x + 1);
@@ -5868,6 +6233,7 @@ function MutuellesPage() {
   })), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
     onClick: () => confirmDelete('cette déclaration', () => {
+      db.deleteMutuelle(m.id).catch(() => {});
       const i = MUT_DECLAREES.indexOf(m);
       MUT_DECLAREES.splice(i, 1);
       r(x => x + 1);
@@ -5905,6 +6271,7 @@ function MutuellesPage() {
         real.mutuelle = edit.mutuelle;
         real.montant = parseInt(edit.montant) || 0;
         real.date = edit.date;
+        db.updateMutuelle(real).catch(() => {});
         toast('Modifié', 'success');
         setEdit(null);
         r(x => x + 1);
@@ -5971,14 +6338,16 @@ function MutFormulaireRapide({
   const [ok, setOk] = useState(false);
   const save = () => {
     if (!patient || !montant) return;
-    MUT_DECLAREES.unshift({
+    const nm = {
       id: 'md' + Date.now(),
       patient,
       mutuelle: mut,
       montant: parseInt(montant) || 0,
       date,
       par: user.id
-    });
+    };
+    MUT_DECLAREES.unshift(nm);
+    db.addMutuelle(nm).catch(() => {});
     logAction('Mutuelle déclarée', 'create', mut + ' — ' + pName(patient) + ' ' + fmtMAD(parseInt(montant) || 0), 'mutuelle');
     setPatient('');
     setMontant('');
@@ -6459,6 +6828,7 @@ function Settings() {
         real.email = edit.email;
         if (edit.motdepasse) real.motdepasse = edit.motdepasse;
         real.role = edit.role;
+        db.updateUser(real).catch(() => {});
         toast('Modifié', 'success');
         setEdit(null);
         r(x => x + 1);
@@ -6527,13 +6897,15 @@ function Settings() {
       className: "btn btn-pri",
       disabled: !uf.nom || !uf.email,
       onClick: () => {
-        USERS.push({
+        const nu = {
           id: 'u' + Date.now(),
           ...uf,
           couleur: AV_COLORS[USERS.length % AV_COLORS.length],
           actif: true,
           derniere: '—'
-        });
+        };
+        USERS.push(nu);
+        db.addUser(nu).catch(() => {});
         toast('Créé', 'success');
         setAdd(false);
         refresh();
@@ -6608,8 +6980,66 @@ const EXTRA_CSS = `
 `;
 
 /* ════════ APP ════════ */
+function LoadingScreen() {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'fixed',
+      inset: 0,
+      background: '#fff',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 52,
+      height: 52,
+      borderRadius: '50%',
+      background: '#176B3A',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "dental",
+    size: 26,
+    color: "#fff"
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: "'DM Sans',sans-serif",
+      fontSize: 20,
+      fontWeight: 700,
+      color: '#176B3A'
+    }
+  }, "Dentixpert Pro"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 200,
+      height: 4,
+      background: '#eee',
+      borderRadius: 99,
+      overflow: 'hidden'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '60%',
+      height: '100%',
+      background: '#176B3A',
+      borderRadius: 99,
+      animation: 'slide 1.2s ease-in-out infinite'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: '#999'
+    }
+  }, "Chargement des donn\xE9es\u2026"), /*#__PURE__*/React.createElement("style", null, `@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}`));
+}
 function App() {
   const [user, setUser] = useState(null);
+  const [appLoading, setAppLoading] = useState(true);
+  const [dbOk, setDbOk] = useState(true);
   const [page, setPage] = useState('dashboard');
   const [toasts, setToasts] = useState([]);
   const [notifs, setNotifs] = useState(NOTIFS_INIT);
@@ -6617,6 +7047,12 @@ function App() {
   const [delStep, setDelStep] = useState(1);
   const [, setTick] = useState(0);
   const refresh = () => setTick(t => t + 1);
+  useEffect(() => {
+    loadAllData().then(() => setAppLoading(false)).catch(() => {
+      setDbOk(false);
+      setAppLoading(false);
+    });
+  }, []);
   const toast = (msg, type = 'success') => {
     const id = Date.now() + Math.random();
     setToasts(t => [...t, {
@@ -6643,15 +7079,17 @@ function App() {
     lu: true
   } : x));
   const logAction = (action, type, detail, entite) => {
-    HISTORIQUE.unshift({
+    const h = {
       id: 'h' + Date.now(),
-      t: '24/05/2026 ' + new Date().toTimeString().slice(0, 5),
+      t: new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toTimeString().slice(0, 5),
       user: user?.id || 'u1',
       action,
       type,
       detail,
       entite
-    });
+    };
+    HISTORIQUE.unshift(h);
+    db.addHistorique(h).catch(() => {});
   };
   const confirmDelete = (label, onConfirm) => {
     if (user.role !== 'admin') {
@@ -6684,6 +7122,7 @@ function App() {
   };
 
   // Injecter CSS dent v2
+  if (appLoading) return /*#__PURE__*/React.createElement(LoadingScreen, null);
   useEffect(() => {
     const s = document.createElement('style');
     s.textContent = EXTRA_CSS;
