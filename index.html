@@ -608,6 +608,27 @@ const db = {
     await SUPA.from('dx_proth_actes').delete().eq('id', id);
     await SUPA.from('dx_proth_tarifs').delete().eq('acte_id', id);
   },
+  async addDepense(d) {
+    await SUPA.from('dx_depenses').insert({
+      id: d.id,
+      categorie: d.categorie,
+      description: d.description,
+      montant: d.montant || 0,
+      date: d.date,
+      par: d.par
+    }).catch(() => {});
+  },
+  async updateDepense(d) {
+    await SUPA.from('dx_depenses').update({
+      categorie: d.categorie,
+      description: d.description,
+      montant: d.montant || 0,
+      date: d.date
+    }).eq('id', d.id).catch(() => {});
+  },
+  async deleteDepense(id) {
+    await SUPA.from('dx_depenses').delete().eq('id', id).catch(() => {});
+  },
   async addHistorique(h) {
     await SUPA.from('dx_historique').insert({
       id: h.id,
@@ -620,6 +641,37 @@ const db = {
     }).catch(() => {});
   }
 };
+
+/* ════════ REALTIME — données partagées entre tous les utilisateurs ════════ */
+let _realtimeRefresh = null;
+function initRealtime(refreshFn) {
+  _realtimeRefresh = refreshFn;
+  try {
+    SUPA.channel('dx-changes').on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'dx_patients'
+    }, () => _realtimeRefresh && loadAllData().then(_realtimeRefresh).catch(() => {})).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'dx_paiements'
+    }, () => _realtimeRefresh && loadAllData().then(_realtimeRefresh).catch(() => {})).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'dx_plans'
+    }, () => _realtimeRefresh && loadAllData().then(_realtimeRefresh).catch(() => {})).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'dx_mutuelles'
+    }, () => _realtimeRefresh && loadAllData().then(_realtimeRefresh).catch(() => {})).on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'dx_rdv'
+    }, () => _realtimeRefresh && loadAllData().then(_realtimeRefresh).catch(() => {})).subscribe();
+  } catch (e) {
+    console.log('Realtime non disponible:', e.message);
+  }
+}
 const ICONS = {
   "alert-circle": "<path d=\"M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0\" /><path d=\"M12 8v4\" /><path d=\"M12 16h.01\" />",
   "alert-triangle": "<path d=\"M12 9v4\" /><path d=\"M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0\" /><path d=\"M12 16h.01\" />",
@@ -3824,8 +3876,185 @@ function PatientsList() {
     onClose: () => setModal(false)
   }));
 }
+
+/* ════════ CHIP ACTE PICKER ════════ */
+function ActePicker({
+  value,
+  onChange,
+  label
+}) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const sel = value || [];
+  const filtered = ACTES_NOM.filter(a => a.nom.toLowerCase().includes(q.toLowerCase()) && !sel.find(s => s.acte === a.id));
+  const add = a => {
+    onChange([...sel, {
+      acte: a.id,
+      label: a.nom,
+      dents: '',
+      prix: ''
+    }]);
+    setQ('');
+  };
+  const remove = i => onChange(sel.filter((_, j) => j !== i));
+  const upd = (i, k, v) => {
+    const n = [...sel];
+    n[i][k] = v;
+    onChange(n);
+  };
+  return /*#__PURE__*/React.createElement("div", null, label && /*#__PURE__*/React.createElement("label", {
+    style: {
+      fontWeight: 600,
+      fontSize: 13,
+      color: '#555',
+      display: 'block',
+      marginBottom: 6
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      border: '1.5px solid #e0e0e0',
+      borderRadius: 12,
+      padding: '10px 12px',
+      background: '#fafafa'
+    }
+  }, sel.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+      marginBottom: 10
+    }
+  }, sel.map((s, i) => {
+    const o = acteObj(s.acte);
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        background: '#fff',
+        border: '1px solid #eee',
+        borderRadius: 10,
+        padding: '8px 12px'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: o.dentsRequises ? 6 : 0
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        flex: 1,
+        fontWeight: 600,
+        fontSize: 13,
+        color: '#176B3A'
+      }
+    }, s.label), /*#__PURE__*/React.createElement("input", {
+      className: "inp",
+      type: "number",
+      placeholder: "Prix MAD",
+      value: s.prix,
+      onChange: e => upd(i, 'prix', e.target.value),
+      style: {
+        width: 110,
+        fontSize: 13
+      }
+    }), /*#__PURE__*/React.createElement("button", {
+      onClick: () => remove(i),
+      style: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        color: '#DC2626',
+        padding: '2px 4px'
+      }
+    }, /*#__PURE__*/React.createElement(Icon, {
+      n: "x",
+      size: 16
+    }))), o.dentsRequises && /*#__PURE__*/React.createElement("input", {
+      className: "inp",
+      placeholder: "Dents (ex: 14,15,16)",
+      value: s.dents,
+      onChange: e => upd(i, 'dents', e.target.value),
+      style: {
+        fontSize: 12.5
+      }
+    }));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    },
+    onBlur: () => setTimeout(() => setOpen(false), 150)
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 8,
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "search",
+    size: 16,
+    color: "#999"
+  }), /*#__PURE__*/React.createElement("input", {
+    placeholder: "Rechercher un acte\u2026",
+    value: q,
+    onChange: e => {
+      setQ(e.target.value);
+      setOpen(true);
+    },
+    onFocus: () => setOpen(true),
+    style: {
+      border: 'none',
+      background: 'none',
+      outline: 'none',
+      fontSize: 13,
+      flex: 1,
+      padding: '2px 0'
+    }
+  })), open && filtered.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      background: '#fff',
+      border: '1px solid #e0e0e0',
+      borderRadius: 10,
+      boxShadow: '0 4px 16px rgba(0,0,0,.1)',
+      zIndex: 100,
+      maxHeight: 200,
+      overflowY: 'auto',
+      marginTop: 6
+    }
+  }, filtered.map(a => /*#__PURE__*/React.createElement("div", {
+    key: a.id,
+    onMouseDown: () => add(a),
+    style: {
+      padding: '10px 14px',
+      cursor: 'pointer',
+      fontSize: 13,
+      borderBottom: '1px solid #f5f5f5',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    },
+    onMouseEnter: e => e.currentTarget.style.background = '#F0FDF4',
+    onMouseLeave: e => e.currentTarget.style.background = '#fff'
+  }, /*#__PURE__*/React.createElement("span", null, a.nom), /*#__PURE__*/React.createElement(Badge, {
+    color: "#888",
+    bg: "#f5f5f5"
+  }, a.cat)))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11.5,
+      color: '#999',
+      marginTop: 4
+    }
+  }, sel.length, " acte(s) s\xE9lectionn\xE9(s) \xB7 Total : ", fmtMAD(sel.reduce((s, x) => s + (parseInt(x.prix) || 0), 0))));
+}
+
+/* ════════ PLAN MODAL ════════ */
 function PlanModal({
   patientId,
+  planExistant,
   onClose
 }) {
   const {
@@ -3834,24 +4063,50 @@ function PlanModal({
     logAction,
     refresh
   } = useApp();
-  const [lignes, setLignes] = useState([{
-    acte: 'ac1',
-    dents: '',
-    prix: ''
-  }]);
-  const [teethFor, setTeethFor] = useState(null);
+  const [lignes, setLignes] = useState(planExistant ? planExistant.lignes.map(l => ({
+    acte: l.acte,
+    label: l.label,
+    dents: l.dents || '',
+    prix: l.prix || ''
+  })) : []);
   const total = lignes.reduce((s, l) => s + (parseInt(l.prix) || 0), 0);
-  const upd = (i, k, v) => {
-    const n = [...lignes];
-    n[i][k] = v;
-    if (k === 'acte') {
-      const o = acteObj(v);
-      if (!o.dentsRequises) n[i].dents = '';
+  const isEdit = !!planExistant;
+  const save = () => {
+    if (isEdit) {
+      const pl = PLANS.find(p => p.id === planExistant.id);
+      pl.lignes = lignes.map(l => ({
+        acte: l.acte,
+        label: acteName(l.acte),
+        dents: l.dents,
+        prix: parseInt(l.prix) || 0
+      }));
+      logAction('Modification plan', 'update', 'Plan modifié — ' + pName(patientId), 'plan');
+      toast('Plan modifié', 'success');
+    } else {
+      const id = 'pl' + Date.now();
+      const newPlan = {
+        id,
+        patient: patientId,
+        praticien: user.id,
+        date: TODAY,
+        statut: 'en_cours',
+        lignes: lignes.map(l => ({
+          acte: l.acte,
+          label: acteName(l.acte),
+          dents: l.dents,
+          prix: parseInt(l.prix) || 0
+        }))
+      };
+      PLANS.push(newPlan);
+      db.addPlan(newPlan).catch(() => {});
+      logAction('Nouveau plan', 'create', 'Plan ' + fmtMAD(total) + ' — ' + pName(patientId), 'plan');
+      toast('Plan créé', 'success');
     }
-    setLignes(n);
+    refresh();
+    onClose();
   };
   return /*#__PURE__*/React.createElement(Modal, {
-    title: "Nouveau plan de traitement",
+    title: isEdit ? 'Modifier le plan' : 'Nouveau plan de traitement',
     icon: "clipboard-plus",
     wide: true,
     onClose: onClose,
@@ -3860,142 +4115,36 @@ function PlanModal({
       onClick: onClose
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
-      disabled: total === 0,
-      onClick: () => {
-        const id = 'pl' + Date.now();
-        const newPlan = {
-          id,
-          patient: patientId,
-          praticien: user.id,
-          date: TODAY,
-          statut: 'en_cours',
-          lignes: lignes.map(l => ({
-            acte: l.acte,
-            label: acteName(l.acte),
-            dents: l.dents,
-            prix: parseInt(l.prix) || 0
-          }))
-        };
-        PLANS.push(newPlan);
-        db.addPlan(newPlan).catch(() => {});
-        logAction('Nouveau plan', 'create', 'Plan ' + fmtMAD(total) + ' — ' + pName(patientId), 'plan');
-        toast('Plan créé', 'success');
-        refresh();
-        onClose();
-      }
-    }, "Enregistrer le plan"))
-  }, /*#__PURE__*/React.createElement("p", {
-    className: "muted",
-    style: {
-      fontSize: 13,
-      marginBottom: 14
-    }
-  }, "Prix libre par patient."), lignes.map((l, i) => {
-    const o = acteObj(l.acte);
-    return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      style: {
-        border: '1px solid #eee',
-        borderRadius: 10,
-        padding: 10,
-        marginBottom: 8
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'grid',
-        gridTemplateColumns: '1fr 110px 36px',
-        gap: 8,
-        alignItems: 'center'
-      }
-    }, /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("input", {
-      className: "inp",
-      placeholder: "Rechercher acte\u2026",
-      onChange: e => {
-        const q = e.target.value.toLowerCase();
-        const found = ACTES_NOM.filter(a => a.nom.toLowerCase().includes(q));
-        if (found.length > 0) upd(i, 'acte', found[0].id);
-      },
-      style: {
-        marginBottom: 4
-      }
-    }), /*#__PURE__*/React.createElement("select", {
-      className: "inp",
-      value: l.acte,
-      onChange: e => upd(i, 'acte', e.target.value)
-    }, ACTES_NOM.map(a => /*#__PURE__*/React.createElement("option", {
-      key: a.id,
-      value: a.id
-    }, a.nom)))), /*#__PURE__*/React.createElement("input", {
-      className: "inp",
-      type: "number",
-      placeholder: "Prix MAD",
-      value: l.prix,
-      onChange: e => upd(i, 'prix', e.target.value)
-    }), /*#__PURE__*/React.createElement("button", {
-      className: "btn-ghost",
-      onClick: () => setLignes(lignes.filter((_, j) => j !== i))
-    }, /*#__PURE__*/React.createElement(Icon, {
-      n: "x",
-      size: 16,
-      color: "#DC2626"
-    }))), o.dentsRequises && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 8,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-sec btn-sm",
-      onClick: () => setTeethFor(i)
-    }, /*#__PURE__*/React.createElement(Icon, {
-      n: "dental",
-      size: 15
-    }), " ", l.dents ? 'Dents : ' + l.dents : 'Choisir les dents'), l.dents && /*#__PURE__*/React.createElement("span", {
-      className: "muted",
-      style: {
-        fontSize: 12
-      }
-    }, l.dents.split(',').filter(Boolean).length, " dent(s)")));
-  }), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-sec btn-sm",
-    onClick: () => setLignes([...lignes, {
-      acte: 'ac1',
-      dents: '',
-      prix: ''
-    }])
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "plus",
-    size: 15
-  }), " Ajouter un acte"), /*#__PURE__*/React.createElement("div", {
+      disabled: lignes.length === 0 || total === 0,
+      onClick: save
+    }, isEdit ? 'Enregistrer les modifications' : 'Créer le plan'))
+  }, /*#__PURE__*/React.createElement(ActePicker, {
+    value: lignes,
+    onChange: setLignes,
+    label: "Actes du plan (recherche + prix)"
+  }), lignes.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       justifyContent: 'space-between',
-      marginTop: 18,
+      marginTop: 14,
       padding: '12px 16px',
       background: '#F0FDF4',
-      borderRadius: 10
+      borderRadius: 10,
+      fontWeight: 700
     }
-  }, /*#__PURE__*/React.createElement("b", null, "Total du plan"), /*#__PURE__*/React.createElement("b", {
+  }, /*#__PURE__*/React.createElement("span", null, "Total du plan"), /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#176B3A',
       fontSize: 16
     }
-  }, fmtMAD(total))), teethFor !== null && /*#__PURE__*/React.createElement(Modal, {
-    title: "S\xE9lectionner les dents",
-    icon: "dental",
-    onClose: () => setTeethFor(null),
-    footer: /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-pri",
-      onClick: () => setTeethFor(null)
-    }, "Valider")
-  }, /*#__PURE__*/React.createElement(TeethPicker, {
-    value: lignes[teethFor].dents,
-    onChange: v => upd(teethFor, 'dents', v)
-  })));
+  }, fmtMAD(total))));
 }
+
+/* ════════ PAY MODAL (par acte spécifique) ════════ */
 function PayModal({
   patientId,
+  actePreselect,
+  planPreselect,
   onClose
 }) {
   const {
@@ -4008,11 +4157,11 @@ function PayModal({
   const [montant, setMontant] = useState('');
   const [mode, setMode] = useState('especes');
   const [note, setNote] = useState('');
-  const [plan, setPlan] = useState(fin.plans[0]?.id || '');
-  const [acte, setActe] = useState('ac1');
-  const rien = montant === '' || parseInt(montant) === 0;
+  const [plan, setPlan] = useState(planPreselect || fin.plans[0]?.id || '');
+  const [acte, setActe] = useState(actePreselect || 'ac1');
+  const rien = !montant || parseInt(montant) === 0;
   return /*#__PURE__*/React.createElement(Modal, {
-    title: "Enregistrer une visite / paiement",
+    title: "Enregistrer un paiement",
     icon: "cash",
     onClose: onClose,
     footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
@@ -4036,7 +4185,7 @@ function PayModal({
         PAIEMENTS.push(np);
         db.addPaiement(np).catch(() => {});
         logAction('Paiement', 'create', pName(patientId) + ' — ' + acteName(acte) + ' — ' + fmtMAD(m), 'paiement');
-        toast(m === 0 ? 'Visite enregistrée' : 'Paiement de ' + fmtMAD(m) + ' enregistré', 'success');
+        toast(m === 0 ? 'Visite enregistrée' : 'Paiement ' + fmtMAD(m) + ' enregistré', 'success');
         refresh();
         onClose();
       }
@@ -4071,7 +4220,7 @@ function PayModal({
       fontSize: 11,
       color: '#0f7a3d'
     }
-  }, "D\xE9j\xE0 pay\xE9"), /*#__PURE__*/React.createElement("b", {
+  }, "Pay\xE9"), /*#__PURE__*/React.createElement("b", {
     style: {
       color: '#0f7a3d'
     }
@@ -4091,9 +4240,8 @@ function PayModal({
     style: {
       color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
     }
-  }, fmtMAD(fin.reste)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Acte r\xE9alis\xE9",
-    req: true
+  }, fmtMAD(fin.reste)))), !actePreselect && /*#__PURE__*/React.createElement(Field, {
+    label: "Acte r\xE9alis\xE9"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
     value: acte,
@@ -4101,7 +4249,20 @@ function PayModal({
   }, ACTES_NOM.map(a => /*#__PURE__*/React.createElement("option", {
     key: a.id,
     value: a.id
-  }, a.nom)))), fin.plans.length > 0 && /*#__PURE__*/React.createElement(Field, {
+  }, a.nom)))), actePreselect && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      background: '#F0FDF4',
+      borderRadius: 10,
+      marginBottom: 12,
+      fontWeight: 600,
+      fontSize: 13,
+      color: '#176B3A'
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "dental",
+    size: 15
+  }), " ", acteName(actePreselect)), fin.plans.length > 0 && /*#__PURE__*/React.createElement(Field, {
     label: "Rattacher au plan"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
@@ -4122,7 +4283,7 @@ function PayModal({
     onChange: e => setMontant(e.target.value),
     autoFocus: true
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Mode de paiement"
+    label: "Mode"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
     value: mode,
@@ -4131,14 +4292,16 @@ function PayModal({
     key: k,
     value: k
   }, v)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Note (optionnel)"
+    label: "Note"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
-    placeholder: "Ex: 2e versement\u2026",
+    placeholder: "Optionnel",
     value: note,
     onChange: e => setNote(e.target.value)
   })));
 }
+
+/* ════════ FICHE PATIENT ════════ */
 function PatientDetail({
   id
 }) {
@@ -4147,13 +4310,16 @@ function PatientDetail({
     setPage,
     toast,
     logAction,
-    refresh
+    refresh,
+    confirmDelete
   } = useApp();
   const p = PATIENTS.find(x => x.id === id);
   const [tab, setTab] = useState('infos');
   const [planModal, setPlanModal] = useState(false);
-  const [payModal, setPayModal] = useState(false);
+  const [planEdit, setPlanEdit] = useState(null);
+  const [payModal, setPayModal] = useState(null);
   const [form, setForm] = useState(p);
+  const [, r] = useState(0);
   if (!p) return /*#__PURE__*/React.createElement(Empty, {
     icon: "user-off",
     msg: "Patient introuvable"
@@ -4166,7 +4332,14 @@ function PatientDetail({
       ...p
     });
   };
-  const TABS = [['infos', 'Infos', 'user'], ['traitement', 'Traitement & Paiements', 'clipboard-list'], ['dents', 'Schéma dentaire', 'dental'], ['rdv', 'Rendez-vous', 'calendar']];
+  const TABS = [['infos', 'Infos', 'user'], ['traitement', 'Traitement', 'clipboard-list'], ['dents', 'Schéma', 'dental'], ['rdv', 'RDV', 'calendar']];
+  const deletePlan = pl => confirmDelete('ce plan de traitement', () => {
+    const i = PLANS.indexOf(pl);
+    PLANS.splice(i, 1);
+    SUPA.from('dx_plans').delete().eq('id', pl.id).catch(() => {});
+    toast('Plan supprimé', 'success');
+    refresh();
+  });
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -4188,19 +4361,20 @@ function PatientDetail({
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 18
+      gap: 18,
+      flexWrap: 'wrap'
     }
   }, /*#__PURE__*/React.createElement(Avatar, {
     prenom: p.prenom,
     nom: p.nom,
-    size: 62
+    size: 58
   }), /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
   }, /*#__PURE__*/React.createElement("h2", {
     style: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 700
     }
   }, p.prenom, " ", p.nom), /*#__PURE__*/React.createElement("div", {
@@ -4209,36 +4383,18 @@ function PatientDetail({
       fontSize: 13,
       marginTop: 3,
       display: 'flex',
-      gap: 16,
+      gap: 14,
       flexWrap: 'wrap'
     }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
+  }, /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement(Icon, {
     n: "phone",
-    size: 14
-  }), " ", p.tel), /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
+    size: 13
+  }), " ", p.tel), /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement(Icon, {
     n: "cake",
-    size: 14
-  }), " ", age(p.naissance), " ans"), p.mutuelle !== 'Aucune' && /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 5
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
+    size: 13
+  }), " ", age(p.naissance), " ans"), p.mutuelle !== 'Aucune' && /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement(Icon, {
     n: "building-hospital",
-    size: 14
+    size: 13
   }), " ", p.mutuelle))), /*#__PURE__*/React.createElement("div", {
     style: {
       textAlign: 'right'
@@ -4246,11 +4402,11 @@ function PatientDetail({
   }, /*#__PURE__*/React.createElement("div", {
     className: "muted",
     style: {
-      fontSize: 12
+      fontSize: 11
     }
   }, "Reste \xE0 payer"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: 700,
       color: fin.reste > 0 ? '#DC2626' : '#2EA85A'
     }
@@ -4258,7 +4414,7 @@ function PatientDetail({
     style: {
       display: 'flex',
       gap: 8,
-      marginTop: 14,
+      marginTop: 12,
       flexWrap: 'wrap'
     }
   }, p.risque && /*#__PURE__*/React.createElement("div", {
@@ -4269,8 +4425,8 @@ function PatientDetail({
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "alert-triangle",
-    size: 15
-  }), " Patient \xE0 risque"), p.maladie && /*#__PURE__*/React.createElement("div", {
+    size: 14
+  }), " \xC0 risque"), p.maladie && /*#__PURE__*/React.createElement("div", {
     className: "alert-box",
     style: {
       background: '#FEF3C7',
@@ -4278,7 +4434,7 @@ function PatientDetail({
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "stethoscope",
-    size: 15
+    size: 14
   }), " ", p.maladie), p.allergie && /*#__PURE__*/React.createElement("div", {
     className: "alert-box",
     style: {
@@ -4287,8 +4443,8 @@ function PatientDetail({
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "vaccine-off",
-    size: 15
-  }), " Allergie : ", p.allergie))), /*#__PURE__*/React.createElement("div", {
+    size: 14
+  }), " ", p.allergie))), /*#__PURE__*/React.createElement("div", {
     className: "tabs"
   }, TABS.map(([k, l, i]) => /*#__PURE__*/React.createElement("button", {
     key: k,
@@ -4296,9 +4452,9 @@ function PatientDetail({
     onClick: () => setTab(k)
   }, /*#__PURE__*/React.createElement(Icon, {
     n: i,
-    size: 15,
+    size: 14,
     style: {
-      marginRight: 6
+      marginRight: 5
     }
   }), l))), tab === 'infos' && /*#__PURE__*/React.createElement("div", {
     className: "card card-pad"
@@ -4359,13 +4515,13 @@ function PatientDetail({
     value: p.maladie,
     onChange: e => upd('maladie', e.target.value)
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Allergie(s)"
+    label: "Allergie"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     value: p.allergie,
     onChange: e => upd('allergie', e.target.value)
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Patient \xE0 risque"
+    label: "\xC0 risque"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
     value: p.risque ? 'Oui' : 'Non',
@@ -4375,7 +4531,7 @@ function PatientDetail({
     onClick: () => {
       db.updatePatient(p).catch(() => {});
       logAction('Modification patient', 'update', p.prenom + ' ' + p.nom + ' modifié', 'patient');
-      toast('Modifications enregistrées', 'success');
+      toast('Sauvegardé', 'success');
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "device-floppy",
@@ -4384,7 +4540,7 @@ function PatientDetail({
     style: {
       display: 'flex',
       flexDirection: 'column',
-      gap: 18
+      gap: 16
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "grid g3"
@@ -4396,11 +4552,11 @@ function PatientDetail({
   }, /*#__PURE__*/React.createElement("div", {
     className: "muted",
     style: {
-      fontSize: 12
+      fontSize: 11
     }
   }, "Total convenu"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 700
     }
   }, fmtMAD(fin.facture))), /*#__PURE__*/React.createElement("div", {
@@ -4410,12 +4566,12 @@ function PatientDetail({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 12,
+      fontSize: 11,
       color: '#0f7a3d'
     }
-  }, "Total pay\xE9"), /*#__PURE__*/React.createElement("div", {
+  }, "Pay\xE9"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 700,
       color: '#0f7a3d'
     }
@@ -4426,12 +4582,12 @@ function PatientDetail({
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 12,
+      fontSize: 11,
       color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
     }
   }, "Reste"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 22,
+      fontSize: 20,
       fontWeight: 700,
       color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
     }
@@ -4453,89 +4609,122 @@ function PatientDetail({
       background: '#E87722',
       color: '#fff'
     },
-    onClick: () => setPayModal(true)
+    onClick: () => setPayModal({})
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "cash",
     size: 16
-  }), " Visite / paiement")), /*#__PURE__*/React.createElement("div", {
-    className: "card card-pad"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "sec-title",
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "clipboard-list",
-    size: 18,
-    color: "#176B3A"
-  }), " Plans"), fin.plans.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
-    icon: "clipboard-off",
-    msg: "Aucun plan."
-  }) : fin.plans.map(pl => {
+  }), " Enregistrer paiement")), fin.plans.map(pl => {
     const tot = planTotal(pl);
     const paid = planPaid(pl.id);
+    const reste = Math.max(tot - paid, 0);
     return /*#__PURE__*/React.createElement("div", {
       key: pl.id,
-      style: {
-        border: '1px solid var(--color-border)',
-        borderRadius: 11,
-        padding: 14,
-        marginBottom: 12
-      }
+      className: "card card-pad"
     }, /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 10
+        marginBottom: 12,
+        flexWrap: 'wrap',
+        gap: 8
       }
-    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", null, "Plan du ", ddmm(pl.date)), " \xB7 ", uName(pl.praticien), " ", pl.statut === 'termine' ? /*#__PURE__*/React.createElement(Badge, {
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("b", null, "Plan du ", ddmm(pl.date)), pl.statut === 'termine' ? /*#__PURE__*/React.createElement(Badge, {
       color: "#2EA85A"
     }, "Termin\xE9") : /*#__PURE__*/React.createElement(Badge, {
       color: "#3B82F6"
     }, "En cours")), /*#__PURE__*/React.createElement("div", {
       style: {
-        textAlign: 'right'
+        display: 'flex',
+        gap: 6,
+        alignItems: 'center'
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "muted",
       style: {
         fontSize: 12
       }
-    }, "pay\xE9 ", fmtMAD(paid), " / "), /*#__PURE__*/React.createElement("b", null, fmtMAD(tot)))), /*#__PURE__*/React.createElement("div", {
-      className: "tbl-scroll"
-    }, /*#__PURE__*/React.createElement("table", {
-      className: "tbl"
-    }, /*#__PURE__*/React.createElement("tbody", null, pl.lignes.map((l, i) => /*#__PURE__*/React.createElement("tr", {
-      key: i
-    }, /*#__PURE__*/React.createElement("td", null, l.label), /*#__PURE__*/React.createElement("td", {
-      className: "muted",
-      style: {
-        width: 100
-      }
-    }, l.dents ? 'Dents ' + l.dents : '—'), /*#__PURE__*/React.createElement("td", {
-      className: "num",
-      style: {
-        fontWeight: 600,
-        width: 100
-      }
-    }, fmtMAD(l.prix)), /*#__PURE__*/React.createElement("td", {
-      style: {
-        width: 40
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "btn-ghost",
-      onClick: () => {
-        pl.lignes.splice(i, 1);
-        logAction('Plan modifié', 'update', 'Ligne supprimée : ' + l.label, 'plan');
-        toast('Ligne supprimée', 'success');
-        refresh();
-      }
+    }, "Pay\xE9 ", fmtMAD(paid), " / ", /*#__PURE__*/React.createElement("b", null, fmtMAD(tot))), /*#__PURE__*/React.createElement("button", {
+      className: "btn btn-sec btn-sm",
+      onClick: () => setPlanEdit(pl)
     }, /*#__PURE__*/React.createElement(Icon, {
-      n: "x",
-      size: 15,
+      n: "pencil",
+      size: 13
+    }), " Modifier"), /*#__PURE__*/React.createElement("button", {
+      className: "btn-ghost",
+      onClick: () => deletePlan(pl)
+    }, /*#__PURE__*/React.createElement(Icon, {
+      n: "trash",
+      size: 16,
       color: "#DC2626"
-    })))))))), /*#__PURE__*/React.createElement("div", {
+    })))), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        marginBottom: 12
+      }
+    }, pl.lignes.map((l, i) => {
+      const payesPourActe = PAIEMENTS.filter(p => p.plan === pl.id && p.acte === l.acte).reduce((s, p) => s + p.montant, 0);
+      const resteActe = Math.max(l.prix - payesPourActe, 0);
+      return /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 12px',
+          background: resteActe === 0 ? '#F0FDF4' : '#FAFAFA',
+          borderRadius: 10,
+          border: '1px solid ' + (resteActe === 0 ? '#c9ead5' : '#eee'),
+          cursor: 'pointer'
+        },
+        onClick: () => setPayModal({
+          acte: l.acte,
+          plan: pl.id
+        })
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 600,
+          fontSize: 13
+        }
+      }, l.label), l.dents && /*#__PURE__*/React.createElement("div", {
+        className: "muted",
+        style: {
+          fontSize: 11.5
+        }
+      }, "Dents : ", l.dents)), /*#__PURE__*/React.createElement("div", {
+        style: {
+          textAlign: 'right',
+          flexShrink: 0
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontWeight: 700,
+          fontSize: 13,
+          color: resteActe === 0 ? '#2EA85A' : '#DC2626'
+        }
+      }, resteActe === 0 ? '✓ Soldé' : 'Reste ' + fmtMAD(resteActe)), /*#__PURE__*/React.createElement("div", {
+        className: "muted",
+        style: {
+          fontSize: 11
+        }
+      }, fmtMAD(l.prix))), /*#__PURE__*/React.createElement(Icon, {
+        n: "cash",
+        size: 16,
+        color: resteActe === 0 ? '#2EA85A' : '#E87722'
+      }));
+    })), /*#__PURE__*/React.createElement("div", {
       className: "progress"
     }, /*#__PURE__*/React.createElement("div", {
       className: "progress-bar",
@@ -4548,7 +4737,12 @@ function PatientDetail({
         fontSize: 11.5,
         marginTop: 5
       }
-    }, "Reste : ", fmtMAD(Math.max(tot - paid, 0))));
+    }, "Reste global : ", fmtMAD(reste)));
+  }), fin.plans.length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "card card-pad"
+  }, /*#__PURE__*/React.createElement(Empty, {
+    icon: "clipboard-off",
+    msg: "Aucun plan. Cr\xE9e le premier plan de traitement."
   })), /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
@@ -4563,66 +4757,51 @@ function PatientDetail({
     className: "sec-title"
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "history",
-    size: 18,
+    size: 16,
     color: "#E87722"
-  }), " Historique complet des visites")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '6px 14px',
-      background: '#f9f9f9',
-      fontSize: 12,
-      color: '#888'
-    }
-  }, "\uD83D\uDD17 Li\xE9 \xE0 plan = d\xE9duit du solde \xA0|\xA0 \u26A1 Acte isol\xE9 = hors plan"), paiements.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+  }), " Historique des paiements")), paiements.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
     icon: "receipt-off",
-    msg: "Aucune visite"
+    msg: "Aucun paiement"
   }) : /*#__PURE__*/React.createElement("div", {
     className: "tbl-scroll"
   }, /*#__PURE__*/React.createElement("table", {
     className: "tbl"
   }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Date"), /*#__PURE__*/React.createElement("th", null, "Acte"), /*#__PURE__*/React.createElement("th", {
     className: "num"
-  }, "Pay\xE9"), /*#__PURE__*/React.createElement("th", null, "Mode"), /*#__PURE__*/React.createElement("th", null, "Par"))), /*#__PURE__*/React.createElement("tbody", null, paiements.map(e => /*#__PURE__*/React.createElement("tr", {
-    key: e.id
-  }, /*#__PURE__*/React.createElement("td", null, ddmm(e.date)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("div", {
+  }, "Pay\xE9"), /*#__PURE__*/React.createElement("th", null, "Mode"), /*#__PURE__*/React.createElement("th", {
     style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6
+      width: 40
     }
-  }, e.plan ? /*#__PURE__*/React.createElement("span", {
-    title: "Li\xE9 \xE0 un plan",
+  }))), /*#__PURE__*/React.createElement("tbody", null, paiements.map(e => /*#__PURE__*/React.createElement("tr", {
+    key: e.id,
     style: {
-      fontSize: 10,
-      background: '#D1FAE5',
-      color: '#065f46',
-      padding: '1px 5px',
-      borderRadius: 4
-    }
-  }, "Plan") : /*#__PURE__*/React.createElement("span", {
-    title: "Acte isol\xE9",
+      cursor: 'pointer'
+    },
+    onClick: () => setPayModal({
+      existing: e
+    })
+  }, /*#__PURE__*/React.createElement("td", null, ddmm(e.date)), /*#__PURE__*/React.createElement("td", {
     style: {
-      fontSize: 10,
-      background: '#FEF3C7',
-      color: '#92400e',
-      padding: '1px 5px',
-      borderRadius: 4
+      fontSize: 13
     }
-  }, "Isol\xE9"), e.acte ? acteName(e.acte) : /*#__PURE__*/React.createElement("span", {
+  }, e.acte ? acteName(e.acte) : /*#__PURE__*/React.createElement("span", {
     className: "muted"
-  }, "\u2014"))), /*#__PURE__*/React.createElement("td", {
+  }, "\u2014")), /*#__PURE__*/React.createElement("td", {
     className: "num",
     style: {
       fontWeight: 700,
       color: e.montant > 0 ? '#176B3A' : '#999'
     }
-  }, e.montant > 0 ? fmtMAD(e.montant) : 'Rien payé'), /*#__PURE__*/React.createElement("td", null, e.montant > 0 ? /*#__PURE__*/React.createElement(Badge, {
+  }, e.montant > 0 ? fmtMAD(e.montant) : 'Visite'), /*#__PURE__*/React.createElement("td", null, e.montant > 0 ? /*#__PURE__*/React.createElement(Badge, {
     color: "#666",
     bg: "#f0f0f0"
   }, MODE_PAY[e.mode]) : /*#__PURE__*/React.createElement("span", {
     className: "muted"
-  }, "\u2014")), /*#__PURE__*/React.createElement("td", {
-    className: "muted"
-  }, USERS.find(u => u.id === e.par)?.prenom)))))))), tab === 'dents' && /*#__PURE__*/React.createElement(Odontogram, {
+  }, "\u2014")), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(Icon, {
+    n: "pencil",
+    size: 14,
+    color: "#ccc"
+  }))))))))), tab === 'dents' && /*#__PURE__*/React.createElement(Odontogram, {
     patientId: id
   }), tab === 'rdv' && /*#__PURE__*/React.createElement("div", {
     className: "card card-pad"
@@ -4635,12 +4814,12 @@ function PatientDetail({
       display: 'flex',
       alignItems: 'center',
       gap: 12,
-      padding: '12px 4px',
+      padding: '10px 4px',
       borderBottom: '1px solid #f4f4f4'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      width: 90
+      width: 80
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4655,18 +4834,24 @@ function PatientDetail({
     style: {
       flex: 1
     }
-  }, r.motif, " \xB7 ", uName(r.praticien)), /*#__PURE__*/React.createElement(RdvBadge, {
+  }, r.motif), /*#__PURE__*/React.createElement(RdvBadge, {
     statut: r.statut
   })))), planModal && /*#__PURE__*/React.createElement(PlanModal, {
     patientId: id,
     onClose: () => setPlanModal(false)
-  }), payModal && /*#__PURE__*/React.createElement(PayModal, {
+  }), planEdit && /*#__PURE__*/React.createElement(PlanModal, {
     patientId: id,
-    onClose: () => setPayModal(false)
+    planExistant: planEdit,
+    onClose: () => setPlanEdit(null)
+  }), payModal && !payModal.existing && /*#__PURE__*/React.createElement(PayModal, {
+    patientId: id,
+    actePreselect: payModal.acte,
+    planPreselect: payModal.plan,
+    onClose: () => setPayModal(null)
   }));
 }
 
-/* ════════ SAISIE DU JOUR ════════ */
+/* ════════ SAISIE DU JOUR REDESIGNÉE ════════ */
 function SaisieJour() {
   const {
     user,
@@ -4676,119 +4861,59 @@ function SaisieJour() {
   } = useApp();
   const [target, setTarget] = useState(null);
   const [q, setQ] = useState('');
-  const [plan, setPlan] = useState('__aucun__');
-  const [acte, setActe] = useState('ac1');
-  const [acteQ, setActeQ] = useState('');
-  const [dents, setDents] = useState('');
-  const [prix, setPrix] = useState('');
+  const [payFor, setPayFor] = useState(null); // {acte, plan, label}
   const [montant, setMontant] = useState('');
   const [mode, setMode] = useState('especes');
-  const [teeth, setTeeth] = useState(false);
+  const [newActe, setNewActe] = useState(false);
+  const [acteLibre, setActeLibre] = useState('ac1');
+  const [prixLibre, setPrixLibre] = useState('');
   const filteredPatients = PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel).toLowerCase().includes(q.toLowerCase()));
-  const filteredActes = ACTES_NOM.filter(a => a.nom.toLowerCase().includes(acteQ.toLowerCase()));
   const open = p => {
-    const fin = patientFinance(p.id);
     setTarget(p);
-    setPlan('__aucun__');
-    setActe(ACTES_NOM[0]?.id || 'ac1');
-    setActeQ('');
-    setDents('');
-    setPrix('');
+    setPayFor(null);
     setMontant('');
     setMode('especes');
+    setNewActe(false);
   };
-  const save = () => {
-    const pr = parseInt(prix) || 0;
+  const enregistrer = () => {
     const m = parseInt(montant) || 0;
-    const o = acteObj(acte);
-    const now = 'pay' + Date.now();
-    if (plan === '__aucun__') {
-      // Acte sans plan → paiement libre, ne touche à aucun plan
-      const np = {
-        id: now,
-        patient: target.id,
-        plan: null,
-        acte,
-        date: TODAY,
-        montant: m,
-        mode,
-        par: user.id,
-        note: acteName(acte) + (pr ? ' — prix: ' + fmtMAD(pr) : '')
-      };
-      PAIEMENTS.push(np);
-      db.addPaiement(np).catch(() => {});
-    } else if (plan === '__nouveau__') {
-      // Nouveau plan créé à la volée
+    const np = {
+      id: 'pay' + Date.now(),
+      patient: target.id,
+      plan: payFor?.plan || null,
+      acte: payFor?.acte || acteLibre,
+      date: TODAY,
+      montant: m,
+      mode,
+      par: user.id,
+      note: 'Saisie du jour'
+    };
+    if (newActe && prixLibre) {
       const planId = 'pl' + Date.now();
-      const newPlan = {
+      PLANS.push({
         id: planId,
         patient: target.id,
         praticien: user.id,
         date: TODAY,
         statut: 'en_cours',
         lignes: [{
-          acte,
-          label: acteName(acte),
-          dents: o.dentsRequises ? dents : '',
-          prix: pr
+          acte: acteLibre,
+          label: acteName(acteLibre),
+          dents: '',
+          prix: parseInt(prixLibre) || 0
         }]
-      };
-      PLANS.push(newPlan);
-      db.addPlan(newPlan).catch(() => {});
-      const np = {
-        id: now,
-        patient: target.id,
-        plan: planId,
-        acte,
-        date: TODAY,
-        montant: m,
-        mode,
-        par: user.id,
-        note: 'Saisie — ' + acteName(acte)
-      };
-      PAIEMENTS.push(np);
-      db.addPaiement(np).catch(() => {});
-    } else {
-      // Plan existant sélectionné → ajouter la ligne au plan
-      const pl = PLANS.find(x => x.id === plan);
-      if (pl) {
-        pl.lignes.push({
-          acte,
-          label: acteName(acte),
-          dents: o.dentsRequises ? dents : '',
-          prix: pr
-        });
-        db.addPlanLigne(plan, {
-          acte,
-          label: acteName(acte),
-          dents: o.dentsRequises ? dents : '',
-          prix: pr
-        }).catch(() => {});
-      }
-      const np = {
-        id: now,
-        patient: target.id,
-        plan,
-        acte,
-        date: TODAY,
-        montant: m,
-        mode,
-        par: user.id,
-        note: 'Saisie — ' + acteName(acte)
-      };
-      PAIEMENTS.push(np);
-      db.addPaiement(np).catch(() => {});
+      });
+      np.plan = planId;
+      db.addPlan(PLANS[PLANS.length - 1]).catch(() => {});
     }
-    logAction('Saisie du jour', 'create', pName(target.id) + ' — ' + acteName(acte) + ' — payé ' + fmtMAD(m), 'acte');
-    toast('Acte enregistré ✓', 'success');
+    PAIEMENTS.push(np);
+    db.addPaiement(np).catch(() => {});
+    logAction('Saisie du jour', 'create', pName(target.id) + ' — ' + acteName(np.acte) + ' — ' + fmtMAD(m), 'acte');
+    toast('Enregistré', 'success');
     refresh();
     setTarget(null);
   };
-  const o = acteObj(acte);
-  const targetFin = target ? patientFinance(target.id) : null;
-  const prixN = parseInt(prix) || 0;
-  const montantN = parseInt(montant) || 0;
-  const resteActe = Math.max(prixN - montantN, 0);
+  const fin = target ? patientFinance(target.id) : null;
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -4798,8 +4923,9 @@ function SaisieJour() {
   }, /*#__PURE__*/React.createElement("div", {
     className: "card card-pad",
     style: {
-      background: '#F0FDF4',
-      border: '1px solid #c9ead5'
+      background: 'linear-gradient(120deg,#176B3A,#0f4d29)',
+      color: '#fff',
+      border: 'none'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4809,23 +4935,24 @@ function SaisieJour() {
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "bolt",
-    size: 22,
-    color: "#176B3A"
+    size: 20,
+    color: "#fff"
   }), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("b", {
     style: {
       fontSize: 15
     }
   }, "Saisie rapide du jour"), /*#__PURE__*/React.createElement("div", {
-    className: "muted",
     style: {
-      fontSize: 12.5
+      fontSize: 12,
+      opacity: .85,
+      marginTop: 2
     }
-  }, "S\xE9lectionne un patient \u2192 choisis l'acte \u2192 entre le prix et le montant pay\xE9.")))), /*#__PURE__*/React.createElement("div", {
+  }, "S\xE9lectionne un patient \u2192 choisis l'acte \u2192 enregistre le paiement")))), /*#__PURE__*/React.createElement("div", {
     className: "card card-pad"
   }, /*#__PURE__*/React.createElement("div", {
     className: "tb-search",
     style: {
-      maxWidth: 400
+      maxWidth: '100%'
     }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "search",
@@ -4844,21 +4971,21 @@ function SaisieJour() {
     className: "tbl-scroll"
   }, /*#__PURE__*/React.createElement("table", {
     className: "tbl"
-  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Patient"), /*#__PURE__*/React.createElement("th", null, "T\xE9l\xE9phone"), /*#__PURE__*/React.createElement("th", {
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("th", null, "Patient"), /*#__PURE__*/React.createElement("th", {
     className: "num"
-  }, "Reste d\xFB (plans)"), /*#__PURE__*/React.createElement("th", {
+  }, "Reste d\xFB"), /*#__PURE__*/React.createElement("th", null, "Plans"), /*#__PURE__*/React.createElement("th", {
     style: {
-      width: 160
+      width: 120
     }
   }))), /*#__PURE__*/React.createElement("tbody", null, filteredPatients.map(p => {
-    const fin = patientFinance(p.id);
+    const f = patientFinance(p.id);
     return /*#__PURE__*/React.createElement("tr", {
       key: p.id
     }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("div", {
       style: {
         display: 'flex',
         alignItems: 'center',
-        gap: 11
+        gap: 10
       }
     }, /*#__PURE__*/React.createElement(Avatar, {
       prenom: p.prenom,
@@ -4870,108 +4997,226 @@ function SaisieJour() {
       }
     }, p.prenom, " ", p.nom), p.risque && /*#__PURE__*/React.createElement(Badge, {
       color: "#DC2626"
-    }, "\xC0 risque")))), /*#__PURE__*/React.createElement("td", null, p.tel), /*#__PURE__*/React.createElement("td", {
+    }, "\xC0 risque")))), /*#__PURE__*/React.createElement("td", {
       className: "num",
       style: {
         fontWeight: 700,
-        color: fin.reste > 0 ? '#DC2626' : '#2EA85A'
+        color: f.reste > 0 ? '#DC2626' : '#2EA85A'
       }
-    }, fmtMAD(fin.reste)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("button", {
+    }, fmtMAD(f.reste)), /*#__PURE__*/React.createElement("td", {
+      className: "muted"
+    }, f.plans.length, " plan", f.plans.length > 1 ? 's' : ''), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri btn-sm",
       onClick: () => open(p)
     }, /*#__PURE__*/React.createElement(Icon, {
       n: "pencil-plus",
-      size: 15
+      size: 14
     }), " Saisir")));
   }))))), target && /*#__PURE__*/React.createElement(Modal, {
     title: 'Saisie — ' + target.prenom + ' ' + target.nom,
     icon: "pencil-plus",
+    wide: true,
     onClose: () => setTarget(null),
     footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       className: "btn btn-sec",
       onClick: () => setTarget(null)
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
-      disabled: !prix,
-      onClick: save
+      disabled: !payFor && !newActe,
+      onClick: enregistrer
     }, "Enregistrer"))
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Rattacher \xE0 un plan de traitement"
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    value: plan,
-    onChange: e => setPlan(e.target.value)
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "__aucun__"
-  }, "\u2014 Aucun plan (acte isol\xE9)"), /*#__PURE__*/React.createElement("option", {
-    value: "__nouveau__"
-  }, "\u2795 Cr\xE9er un nouveau plan"), targetFin.plans.map(pl => /*#__PURE__*/React.createElement("option", {
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "grid g3",
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bal-card",
+    style: {
+      background: '#f5f5f5',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "muted",
+    style: {
+      fontSize: 11
+    }
+  }, "Factur\xE9"), /*#__PURE__*/React.createElement("b", null, fmtMAD(fin.facture))), /*#__PURE__*/React.createElement("div", {
+    className: "bal-card",
+    style: {
+      background: '#D1FAE5',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#0f7a3d'
+    }
+  }, "Pay\xE9"), /*#__PURE__*/React.createElement("b", {
+    style: {
+      color: '#0f7a3d'
+    }
+  }, fmtMAD(fin.paye))), /*#__PURE__*/React.createElement("div", {
+    className: "bal-card",
+    style: {
+      background: fin.reste > 0 ? '#FEE2E2' : '#D1FAE5',
+      textAlign: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
+    }
+  }, "Reste"), /*#__PURE__*/React.createElement("b", {
+    style: {
+      color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
+    }
+  }, fmtMAD(fin.reste)))), fin.plans.filter(pl => pl.statut !== 'termine').length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      marginBottom: 8,
+      color: '#444'
+    }
+  }, "Actes en cours \u2014 cliquer pour s\xE9lectionner :"), fin.plans.filter(pl => pl.statut !== 'termine').map(pl => /*#__PURE__*/React.createElement("div", {
     key: pl.id,
-    value: pl.id
-  }, planLabel(pl), " \u2014 ", fmtMAD(planTotal(pl))))), plan === '__aucun__' && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 10
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     className: "muted",
     style: {
       fontSize: 11.5,
-      marginTop: 4
+      marginBottom: 5
     }
-  }, "Le paiement sera enregistr\xE9 sans \xEAtre li\xE9 \xE0 un plan. Il n'affecte pas les soldes des plans."), plan === '__nouveau__' && /*#__PURE__*/React.createElement("div", {
-    className: "muted",
+  }, "Plan du ", ddmm(pl.date)), pl.lignes.map((l, i) => {
+    const payeActe = PAIEMENTS.filter(p => p.plan === pl.id && p.acte === l.acte).reduce((s, p) => s + p.montant, 0);
+    const resteActe = Math.max(l.prix - payeActe, 0);
+    const isSelected = payFor?.acte === l.acte && payFor?.plan === pl.id;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 12px',
+        marginBottom: 4,
+        borderRadius: 10,
+        border: '2px solid ' + (isSelected ? '#176B3A' : resteActe === 0 ? '#d1fae5' : '#eee'),
+        background: isSelected ? '#F0FDF4' : resteActe === 0 ? '#f9fef9' : '#fafafa',
+        cursor: resteActe === 0 ? 'default' : 'pointer',
+        opacity: resteActe === 0 ? .6 : 1
+      },
+      onClick: () => resteActe > 0 && setPayFor({
+        acte: l.acte,
+        plan: pl.id,
+        label: l.label,
+        reste: resteActe
+      })
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 600,
+        fontSize: 13
+      }
+    }, l.label), l.dents && /*#__PURE__*/React.createElement("div", {
+      className: "muted",
+      style: {
+        fontSize: 11
+      }
+    }, "Dents : ", l.dents)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        textAlign: 'right'
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontWeight: 700,
+        fontSize: 13,
+        color: resteActe === 0 ? '#2EA85A' : '#DC2626'
+      }
+    }, resteActe === 0 ? 'Soldé ✓' : 'Reste ' + fmtMAD(resteActe))), isSelected && /*#__PURE__*/React.createElement(Icon, {
+      n: "circle-check-filled",
+      size: 20,
+      color: "#176B3A"
+    }));
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "divider"
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11.5,
-      marginTop: 4
+      marginBottom: 14
     }
-  }, "Un nouveau plan sera cr\xE9\xE9 avec cet acte.")), /*#__PURE__*/React.createElement(Field, {
-    label: "Acte r\xE9alis\xE9 aujourd'hui"
-  }, /*#__PURE__*/React.createElement("input", {
-    className: "inp",
-    placeholder: "Rechercher un acte\u2026",
-    value: acteQ,
-    onChange: e => setActeQ(e.target.value),
-    style: {
-      marginBottom: 6
-    }
-  }), /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    value: acte,
-    onChange: e => {
-      setActe(e.target.value);
-      if (!acteObj(e.target.value).dentsRequises) setDents('');
-    }
-  }, filteredActes.map(a => /*#__PURE__*/React.createElement("option", {
-    key: a.id,
-    value: a.id
-  }, a.nom)))), o.dentsRequises && /*#__PURE__*/React.createElement(Field, {
-    label: "Dents concern\xE9es"
   }, /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-sec btn-sm",
-    onClick: () => setTeeth(true)
+    className: 'btn ' + (newActe ? 'btn-pri' : 'btn-sec') + ' btn-sm',
+    onClick: () => {
+      setNewActe(!newActe);
+      setPayFor(null);
+    }
   }, /*#__PURE__*/React.createElement(Icon, {
-    n: "dental",
+    n: newActe ? 'circle-check-filled' : 'plus',
     size: 15
-  }), " ", dents ? 'Dents : ' + dents : 'Choisir les dents')), /*#__PURE__*/React.createElement("div", {
+  }), " ", newActe ? 'Nouvel acte sélectionné' : 'Ajouter un nouvel acte'), newActe && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 10,
+      padding: '12px',
+      background: '#FFFBEB',
+      borderRadius: 10,
+      border: '1px solid #FDE68A'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
-      gap: '0 14px'
+      gap: '0 12px'
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "Prix de l'acte (MAD)",
-    req: true
+    label: "Acte"
+  }, /*#__PURE__*/React.createElement("select", {
+    className: "inp",
+    value: acteLibre,
+    onChange: e => setActeLibre(e.target.value)
+  }, ACTES_NOM.map(a => /*#__PURE__*/React.createElement("option", {
+    key: a.id,
+    value: a.id
+  }, a.nom)))), /*#__PURE__*/React.createElement(Field, {
+    label: "Prix (MAD)"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "number",
-    value: prix,
-    onChange: e => setPrix(e.target.value),
-    autoFocus: true
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "Pay\xE9 aujourd'hui (MAD)"
+    placeholder: "0",
+    value: prixLibre,
+    onChange: e => setPrixLibre(e.target.value)
+  }))))), (payFor || newActe) && /*#__PURE__*/React.createElement(React.Fragment, null, payFor && /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '10px 14px',
+      background: '#F0FDF4',
+      borderRadius: 10,
+      marginBottom: 12,
+      fontWeight: 600,
+      color: '#176B3A',
+      fontSize: 13
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "dental",
+    size: 15
+  }), " ", payFor.label, " \u2014 Reste : ", fmtMAD(payFor.reste)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '0 12px'
+    }
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Montant pay\xE9 aujourd'hui (MAD)"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "number",
     placeholder: "0 si rien pay\xE9",
     value: montant,
-    onChange: e => setMontant(e.target.value)
-  }))), /*#__PURE__*/React.createElement(Field, {
+    onChange: e => setMontant(e.target.value),
+    autoFocus: true
+  })), /*#__PURE__*/React.createElement(Field, {
     label: "Mode de paiement"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
@@ -4980,38 +5225,13 @@ function SaisieJour() {
   }, Object.entries(MODE_PAY).map(([k, v]) => /*#__PURE__*/React.createElement("option", {
     key: k,
     value: k
-  }, v)))), prix && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      padding: '10px 14px',
-      background: resteActe > 0 ? '#FEF2F2' : '#F0FDF4',
-      borderRadius: 9,
-      fontSize: 13
-    }
-  }, /*#__PURE__*/React.createElement("span", null, "Reste \xE0 payer pour cet acte"), /*#__PURE__*/React.createElement("b", {
-    style: {
-      color: resteActe > 0 ? '#DC2626' : '#2EA85A'
-    }
-  }, fmtMAD(resteActe))), teeth && /*#__PURE__*/React.createElement(Modal, {
-    title: "S\xE9lectionner les dents",
-    icon: "dental",
-    onClose: () => setTeeth(false),
-    footer: /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-pri",
-      onClick: () => setTeeth(false)
-    }, "Valider")
-  }, /*#__PURE__*/React.createElement(TeethPicker, {
-    value: dents,
-    onChange: setDents
-  }))));
+  }, v))))))));
 }
 
-/* ════════ GESTION ACTES ════════ */
+/* ════════ ACTES GESTION ════════ */
 function ActesGestion() {
   const {
     toast,
-    logAction,
     confirmDelete,
     refresh
   } = useApp();
@@ -5023,8 +5243,6 @@ function ActesGestion() {
     cat: 'Conservateur',
     dentsRequises: false
   });
-  const [q, setQ] = useState('');
-  const filtered = ACTES_NOM.filter(a => a.nom.toLowerCase().includes(q.toLowerCase()) || a.cat.toLowerCase().includes(q.toLowerCase()));
   return /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
@@ -5035,9 +5253,7 @@ function ActesGestion() {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 10,
-      borderBottom: '1px solid var(--color-border)',
-      flexWrap: 'wrap'
+      borderBottom: '1px solid var(--color-border)'
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "sec-title"
@@ -5045,22 +5261,11 @@ function ActesGestion() {
     n: "list-check",
     size: 18,
     color: "#176B3A"
-  }), " Liste des actes"), /*#__PURE__*/React.createElement("div", {
-    className: "tb-search",
-    style: {
-      flex: 1,
-      maxWidth: 280
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "search",
-    size: 15,
-    color: "#999"
-  }), /*#__PURE__*/React.createElement("input", {
-    placeholder: "Rechercher un acte\u2026",
-    value: q,
-    onChange: e => setQ(e.target.value)
-  })), /*#__PURE__*/React.createElement("button", {
+  }), " Actes"), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri btn-sm",
+    style: {
+      marginLeft: 'auto'
+    },
     onClick: () => {
       setEf({
         nom: '',
@@ -5080,7 +5285,7 @@ function ActesGestion() {
     style: {
       width: 90
     }
-  }))), /*#__PURE__*/React.createElement("tbody", null, filtered.map(a => /*#__PURE__*/React.createElement("tr", {
+  }))), /*#__PURE__*/React.createElement("tbody", null, ACTES_NOM.map(a => /*#__PURE__*/React.createElement("tr", {
     key: a.id
   }, /*#__PURE__*/React.createElement("td", {
     style: {
@@ -5118,14 +5323,14 @@ function ActesGestion() {
       ACTES_NOM.splice(i, 1);
       db.deleteActe(a.id).catch(() => {});
       r(x => x + 1);
-      toast('Acte supprimé', 'success');
+      toast('Supprimé', 'success');
     })
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "trash",
     size: 16,
     color: "#DC2626"
   }))))))))), edit && /*#__PURE__*/React.createElement(Modal, {
-    title: "Modifier l'acte",
+    title: "Modifier",
     icon: "pencil",
     onClose: () => setEdit(null),
     footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
@@ -5212,8 +5417,7 @@ function ActesGestion() {
     onChange: e => setEf({
       ...ef,
       nom: e.target.value
-    }),
-    placeholder: "Ex: Greffe gingivale"
+    })
   })), /*#__PURE__*/React.createElement(Field, {
     label: "Cat\xE9gorie"
   }, /*#__PURE__*/React.createElement("select", {
@@ -5252,76 +5456,16 @@ function Agenda() {
   } = useApp();
   const [view, setView] = useState('jour');
   const [modal, setModal] = useState(false);
-  // Date dynamique — utilise la vraie date du jour
-  const todayReal = new Date().toISOString().slice(0, 10);
-  const [currentDate, setCurrentDate] = useState(todayReal);
-  const currentMonth = currentDate.slice(0, 7);
   const mine = r => user.role === 'dentiste_remplacant' ? r.praticien === user.id : true;
-  const week = weekDates(currentDate);
-  const dt = new Date(currentDate);
-  const monthName = MONTHS[dt.getMonth()] + ' ' + dt.getFullYear();
-  const monthStart = new Date(dt.getFullYear(), dt.getMonth(), 1);
-  const firstDow = (monthStart.getDay() + 6) % 7;
-  const daysInMonth = new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) {
-    const ds = String(d).padStart(2, '0');
-    cells.push(dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + ds);
-  }
-  const prevMonth = () => {
-    const d = new Date(dt.getFullYear(), dt.getMonth() - 1, 1);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
-  const nextMonth = () => {
-    const d = new Date(dt.getFullYear(), dt.getMonth() + 1, 1);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
-  const prevWeek = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() - 7);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
-  const nextWeek = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + 7);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
-  const prevDay = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() - 1);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
-  const nextDay = () => {
-    const d = new Date(currentDate);
-    d.setDate(d.getDate() + 1);
-    setCurrentDate(d.toISOString().slice(0, 10));
-  };
   const hours = [];
   for (let h = 8; h <= 19; h++) hours.push(h);
-  const [rdvForm, setRdvForm] = useState({
-    patient: '',
-    praticien: user.id,
-    date: currentDate,
-    heure: '09:00',
-    duree: 30,
-    motif: 'Consultation',
-    statut: 'en_attente'
-  });
-  const saveRdv = () => {
-    const nr = {
-      id: 'r' + Date.now(),
-      ...rdvForm
-    };
-    RDV.push(nr);
-    db.addRdv(nr).catch(() => {});
-    toast('RDV enregistré', 'success');
-    setModal(false);
-    refresh && refresh();
-  };
-  const {
-    refresh
-  } = useApp();
+  const week = weekDates(TODAY);
+  const monthStart = new Date(2026, 4, 1);
+  const firstDow = (monthStart.getDay() + 6) % 7;
+  const daysInMonth = 31;
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push('2026-05-' + String(d).padStart(2, '0'));
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -5342,56 +5486,12 @@ function Agenda() {
     key: v,
     className: 'pill' + (view === v ? ' on' : ''),
     onClick: () => setView(v)
-  }, l))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 8,
-      marginLeft: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn-ghost",
-    onClick: view === 'mois' ? prevMonth : view === 'semaine' ? prevWeek : prevDay
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "chevron-left",
-    size: 18
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontWeight: 700,
-      minWidth: 200,
-      textAlign: 'center'
-    }
-  }, view === 'mois' ? monthName : view === 'semaine' ? 'Semaine du ' + ddmm(week[0]) : new Date(currentDate).toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric'
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "btn-ghost",
-    onClick: view === 'mois' ? nextMonth : view === 'semaine' ? nextWeek : nextDay
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "chevron-right",
-    size: 18
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-sec btn-sm",
-    onClick: () => setCurrentDate(todayReal)
-  }, "Aujourd'hui")), /*#__PURE__*/React.createElement("button", {
+  }, l))), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     style: {
       marginLeft: 'auto'
     },
-    onClick: () => {
-      setRdvForm({
-        patient: '',
-        praticien: user.id,
-        date: currentDate,
-        heure: '09:00',
-        duree: 30,
-        motif: 'Consultation',
-        statut: 'en_attente'
-      });
-      setModal(true);
-    }
+    onClick: () => setModal(true)
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "calendar-plus",
     size: 16
@@ -5401,7 +5501,7 @@ function Agenda() {
     key: h,
     className: "ag-hour"
   }, h, ":00"))), /*#__PURE__*/React.createElement("div", null, hours.map(h => {
-    const evts = RDV.filter(r => r.date === currentDate && mine(r) && parseInt(r.heure) === h);
+    const evts = RDV.filter(r => r.date === TODAY && mine(r) && parseInt(r.heure) === h);
     return /*#__PURE__*/React.createElement("div", {
       key: h,
       className: "ag-slot",
@@ -5417,28 +5517,25 @@ function Agenda() {
         },
         onClick: e => {
           e.stopPropagation();
-          setRdvForm({
-            ...r
-          });
-          setModal(true);
+          setModal(r);
         }
-      }, /*#__PURE__*/React.createElement("b", null, r.heure, " \xB7 ", p ? p.prenom + ' ' + p.nom : '?'), r.motif);
+      }, /*#__PURE__*/React.createElement("b", null, r.heure, " \xB7 ", p?.prenom, " ", p?.nom), r.motif);
     }));
   }))), view === 'semaine' && /*#__PURE__*/React.createElement("div", {
     className: "week-grid"
   }, /*#__PURE__*/React.createElement("div", {
     className: "week-head"
   }), week.map(d => {
-    const dt2 = new Date(d);
-    const isT = d === todayReal;
+    const dt = new Date(d);
+    const isT = d === TODAY;
     return /*#__PURE__*/React.createElement("div", {
       key: d,
       className: 'week-head' + (isT ? ' today' : '')
-    }, DOW[(dt2.getDay() + 6) % 7], /*#__PURE__*/React.createElement("div", {
+    }, DOW[(dt.getDay() + 6) % 7], /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 15
       }
-    }, dt2.getDate()));
+    }, dt.getDate()));
   }), hours.map(h => [/*#__PURE__*/React.createElement("div", {
     key: 'h' + h,
     className: "week-hour"
@@ -5459,12 +5556,9 @@ function Agenda() {
         },
         onClick: e => {
           e.stopPropagation();
-          setRdvForm({
-            ...r
-          });
-          setModal(true);
+          setModal(r);
         }
-      }, r.heure, " ", p ? p.prenom : '?');
+      }, r.heure, " ", p?.prenom);
     }));
   })])), view === 'mois' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "month-grid",
@@ -5482,19 +5576,15 @@ function Agenda() {
       className: "month-cell other"
     });
     const evts = RDV.filter(r => r.date === d && mine(r));
-    const isT = d === todayReal;
+    const isT = d === TODAY;
     return /*#__PURE__*/React.createElement("div", {
       key: i,
       className: 'month-cell' + (isT ? ' today' : ''),
-      onClick: () => {
-        setCurrentDate(d);
-        setView('jour');
-      }
+      onClick: () => setModal(true)
     }, /*#__PURE__*/React.createElement("div", {
       className: "month-daynum",
       style: isT ? {
-        color: '#176B3A',
-        fontWeight: 800
+        color: '#176B3A'
       } : {}
     }, parseInt(d.slice(8))), evts.slice(0, 3).map(r => {
       const s = STATUT_RDV[r.statut];
@@ -5504,13 +5594,8 @@ function Agenda() {
         className: "month-evt",
         style: {
           background: s.color
-        },
-        onClick: e => {
-          e.stopPropagation();
-          setCurrentDate(d);
-          setView('jour');
         }
-      }, r.heure, " ", p ? p.prenom : '?');
+      }, r.heure, " ", p?.prenom);
     }), evts.length > 3 && /*#__PURE__*/React.createElement("div", {
       style: {
         fontSize: 9.5,
@@ -5518,7 +5603,7 @@ function Agenda() {
       }
     }, "+", evts.length - 3));
   }))), modal && /*#__PURE__*/React.createElement(Modal, {
-    title: rdvForm.id ? 'Modifier le RDV' : 'Nouveau RDV',
+    title: modal.id ? 'Modifier le RDV' : 'Nouveau RDV',
     icon: "calendar-plus",
     onClose: () => setModal(false),
     footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
@@ -5526,22 +5611,18 @@ function Agenda() {
       onClick: () => setModal(false)
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
-      disabled: !rdvForm.patient,
-      onClick: saveRdv
+      onClick: () => {
+        setModal(false);
+        toast('RDV enregistré', 'success');
+      }
     }, "Enregistrer"))
   }, /*#__PURE__*/React.createElement(Field, {
     label: "Patient",
     req: true
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
-    value: rdvForm.patient,
-    onChange: e => setRdvForm({
-      ...rdvForm,
-      patient: e.target.value
-    })
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "\u2014 Choisir \u2014"), PATIENTS.map(p => /*#__PURE__*/React.createElement("option", {
+    defaultValue: modal.patient
+  }, PATIENTS.map(p => /*#__PURE__*/React.createElement("option", {
     key: p.id,
     value: p.id
   }, p.prenom, " ", p.nom)))), /*#__PURE__*/React.createElement("div", {
@@ -5555,45 +5636,19 @@ function Agenda() {
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "date",
-    value: rdvForm.date,
-    onChange: e => setRdvForm({
-      ...rdvForm,
-      date: e.target.value
-    })
+    defaultValue: modal.date || TODAY
   })), /*#__PURE__*/React.createElement(Field, {
     label: "Heure"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "time",
-    value: rdvForm.heure,
-    onChange: e => setRdvForm({
-      ...rdvForm,
-      heure: e.target.value
-    })
+    defaultValue: modal.heure || '09:00'
   }))), /*#__PURE__*/React.createElement(Field, {
     label: "Motif"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
-    value: rdvForm.motif,
-    onChange: e => setRdvForm({
-      ...rdvForm,
-      motif: e.target.value
-    })
-  }, ['Consultation', 'Détartrage', 'Extraction', 'Couronne', 'Prothèse', 'Contrôle', 'Urgence', 'Autre'].map(m => /*#__PURE__*/React.createElement("option", {
-    key: m
-  }, m)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Statut"
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    value: rdvForm.statut,
-    onChange: e => setRdvForm({
-      ...rdvForm,
-      statut: e.target.value
-    })
-  }, Object.entries(STATUT_RDV).map(([k, v]) => /*#__PURE__*/React.createElement("option", {
-    key: k,
-    value: k
-  }, v.label))))));
+    defaultValue: modal.motif
+  }, /*#__PURE__*/React.createElement("option", null, "Consultation"), /*#__PURE__*/React.createElement("option", null, "D\xE9tartrage"), /*#__PURE__*/React.createElement("option", null, "Extraction"), /*#__PURE__*/React.createElement("option", null, "Couronne"), /*#__PURE__*/React.createElement("option", null, "Proth\xE8se"), /*#__PURE__*/React.createElement("option", null, "Contr\xF4le"), /*#__PURE__*/React.createElement("option", null, "Urgence")))));
 }
 function Prothese() {
   const {
@@ -5733,11 +5788,25 @@ function Prothese() {
         fontWeight: 700,
         color: '#176B3A'
       }
-    }, fmtMAD(marge)), /*#__PURE__*/React.createElement("td", null, t.payeLabo ? /*#__PURE__*/React.createElement(Badge, {
+    }, fmtMAD(marge)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("button", {
+      style: {
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer'
+      },
+      onClick: e => {
+        e.stopPropagation();
+        t.payeLabo = !t.payeLabo;
+        db.updateProthStatut && SUPA.from('dx_proth_travaux').update({
+          paye_labo: t.payeLabo
+        }).eq('id', t.id).catch(() => {});
+        r(x => x + 1);
+      }
+    }, t.payeLabo ? /*#__PURE__*/React.createElement(Badge, {
       color: "#2EA85A"
-    }, "Pay\xE9 \u2713") : /*#__PURE__*/React.createElement(Badge, {
+    }, "Pay\xE9 \u2713 \uD83D\uDD13") : /*#__PURE__*/React.createElement(Badge, {
       color: "#E87722"
-    }, "\xC0 payer")));
+    }, "\xC0 payer \uD83D\uDD12"))));
   })))))), tab === 'actes' && !isAssist && /*#__PURE__*/React.createElement(ProthActesGestion, null), tab === 'labos' && !isAssist && /*#__PURE__*/React.createElement(LabosGestion, null), modal && /*#__PURE__*/React.createElement(ProthModal, {
     onClose: () => setModal(false)
   }), statutFor && /*#__PURE__*/React.createElement(Modal, {
@@ -8485,7 +8554,10 @@ function App() {
   const [, setTick] = useState(0);
   const refresh = () => setTick(t => t + 1);
   useEffect(() => {
-    loadAllData().then(() => setAppLoading(false)).catch(() => {
+    loadAllData().then(() => {
+      setAppLoading(false);
+      initRealtime(() => setTick(t => t + 1));
+    }).catch(() => {
       setDbOk(false);
       setAppLoading(false);
     });
