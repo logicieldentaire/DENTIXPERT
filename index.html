@@ -4867,6 +4867,8 @@ function SaisieJour() {
   const [newActe, setNewActe] = useState(false);
   const [acteLibre, setActeLibre] = useState('ac1');
   const [prixLibre, setPrixLibre] = useState('');
+  const [saisieMode, setSaisieMode] = useState('plan');
+  const [newPlanLignes, setNewPlanLignes] = useState([]);
   const filteredPatients = PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel).toLowerCase().includes(q.toLowerCase()));
   const open = p => {
     setTarget(p);
@@ -4874,21 +4876,48 @@ function SaisieJour() {
     setMontant('');
     setMode('especes');
     setNewActe(false);
+    setSaisieMode('plan');
+    setNewPlanLignes([]);
+    setPrixLibre('');
   };
   const enregistrer = () => {
     const m = parseInt(montant) || 0;
-    const np = {
-      id: 'pay' + Date.now(),
-      patient: target.id,
-      plan: payFor?.plan || null,
-      acte: payFor?.acte || acteLibre,
-      date: TODAY,
-      montant: m,
-      mode,
-      par: user.id,
-      note: 'Saisie du jour'
-    };
-    if (newActe && prixLibre) {
+    if (saisieMode === 'newplan' && newPlanLignes.length > 0) {
+      // Créer un nouveau plan complet
+      const planId = 'pl' + Date.now();
+      const newPl = {
+        id: planId,
+        patient: target.id,
+        praticien: user.id,
+        date: TODAY,
+        statut: 'en_cours',
+        lignes: newPlanLignes.map(l => ({
+          acte: l.acte,
+          label: acteName(l.acte),
+          dents: l.dents || '',
+          prix: parseInt(l.prix) || 0
+        }))
+      };
+      PLANS.push(newPl);
+      db.addPlan(newPl).catch(() => {});
+      if (m > 0) {
+        const np = {
+          id: 'pay' + Date.now(),
+          patient: target.id,
+          plan: planId,
+          acte: newPlanLignes[0].acte,
+          date: TODAY,
+          montant: m,
+          mode,
+          par: user.id,
+          note: 'Acompte plan'
+        };
+        PAIEMENTS.push(np);
+        db.addPaiement(np).catch(() => {});
+      }
+      logAction('Saisie du jour', 'create', 'Nouveau plan + ' + fmtMAD(m) + ' — ' + pName(target.id), 'acte');
+    } else if (saisieMode === 'isole' && prixLibre) {
+      // Acte isolé = crée un plan simple
       const planId = 'pl' + Date.now();
       PLANS.push({
         id: planId,
@@ -4903,13 +4932,39 @@ function SaisieJour() {
           prix: parseInt(prixLibre) || 0
         }]
       });
-      np.plan = planId;
       db.addPlan(PLANS[PLANS.length - 1]).catch(() => {});
+      const np = {
+        id: 'pay' + Date.now(),
+        patient: target.id,
+        plan: planId,
+        acte: acteLibre,
+        date: TODAY,
+        montant: m,
+        mode,
+        par: user.id,
+        note: 'Acte isolé'
+      };
+      PAIEMENTS.push(np);
+      db.addPaiement(np).catch(() => {});
+      logAction('Saisie du jour', 'create', acteName(acteLibre) + ' — ' + fmtMAD(m) + ' — ' + pName(target.id), 'acte');
+    } else if (saisieMode === 'plan' && payFor) {
+      // Paiement sur acte d'un plan existant
+      const np = {
+        id: 'pay' + Date.now(),
+        patient: target.id,
+        plan: payFor.plan,
+        acte: payFor.acte,
+        date: TODAY,
+        montant: m,
+        mode,
+        par: user.id,
+        note: 'Saisie du jour'
+      };
+      PAIEMENTS.push(np);
+      db.addPaiement(np).catch(() => {});
+      logAction('Saisie du jour', 'create', pName(target.id) + ' — ' + payFor.label + ' — ' + fmtMAD(m), 'acte');
     }
-    PAIEMENTS.push(np);
-    db.addPaiement(np).catch(() => {});
-    logAction('Saisie du jour', 'create', pName(target.id) + ' — ' + acteName(np.acte) + ' — ' + fmtMAD(m), 'acte');
-    toast('Enregistré', 'success');
+    toast('Enregistré ✓', 'success');
     refresh();
     setTarget(null);
   };
@@ -5022,13 +5077,13 @@ function SaisieJour() {
       onClick: () => setTarget(null)
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
-      disabled: !payFor && !newActe,
+      disabled: saisieMode === 'plan' && !payFor || saisieMode === 'newplan' && newPlanLignes.length === 0 || saisieMode === 'isole' && !prixLibre,
       onClick: enregistrer
     }, "Enregistrer"))
   }, /*#__PURE__*/React.createElement("div", {
     className: "grid g3",
     style: {
-      marginBottom: 16
+      marginBottom: 14
     }
   }, /*#__PURE__*/React.createElement("div", {
     className: "bal-card",
@@ -5071,23 +5126,70 @@ function SaisieJour() {
     style: {
       color: fin.reste > 0 ? '#b91c1c' : '#0f7a3d'
     }
-  }, fmtMAD(fin.reste)))), fin.plans.filter(pl => pl.statut !== 'termine').length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, fmtMAD(fin.reste)))), /*#__PURE__*/React.createElement("div", {
+    className: "tabs",
     style: {
-      fontWeight: 700,
-      fontSize: 13,
-      marginBottom: 8,
-      color: '#444'
+      marginBottom: 12
     }
-  }, "Actes en cours \u2014 cliquer pour s\xE9lectionner :"), fin.plans.filter(pl => pl.statut !== 'termine').map(pl => /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: 'tab' + (saisieMode === 'plan' ? ' on' : ''),
+    onClick: () => {
+      setSaisieMode('plan');
+      setPayFor(null);
+      setNewActe(false);
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "clipboard-list",
+    size: 14,
+    style: {
+      marginRight: 5
+    }
+  }), "Plans en cours"), /*#__PURE__*/React.createElement("button", {
+    className: 'tab' + (saisieMode === 'newplan' ? ' on' : ''),
+    onClick: () => {
+      setSaisieMode('newplan');
+      setPayFor(null);
+      setNewActe(false);
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "clipboard-plus",
+    size: 14,
+    style: {
+      marginRight: 5
+    }
+  }), "Nouveau plan"), /*#__PURE__*/React.createElement("button", {
+    className: 'tab' + (saisieMode === 'isole' ? ' on' : ''),
+    onClick: () => {
+      setSaisieMode('isole');
+      setPayFor(null);
+      setNewActe(true);
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "bolt",
+    size: 14,
+    style: {
+      marginRight: 5
+    }
+  }), "Acte isol\xE9")), saisieMode === 'plan' && /*#__PURE__*/React.createElement(React.Fragment, null, fin.plans.filter(pl => pl.statut !== 'termine').length === 0 ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      padding: '20px',
+      color: '#999',
+      fontSize: 13
+    }
+  }, "Aucun plan en cours pour ce patient") : fin.plans.filter(pl => pl.statut !== 'termine').map(pl => /*#__PURE__*/React.createElement("div", {
     key: pl.id,
     style: {
-      marginBottom: 10
+      marginBottom: 12
     }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "muted",
     style: {
-      fontSize: 11.5,
-      marginBottom: 5
+      fontWeight: 700,
+      fontSize: 12,
+      color: '#888',
+      marginBottom: 6,
+      textTransform: 'uppercase',
+      letterSpacing: .5
     }
   }, "Plan du ", ddmm(pl.date)), pl.lignes.map((l, i) => {
     const payeActe = PAIEMENTS.filter(p => p.plan === pl.id && p.acte === l.acte).reduce((s, p) => s + p.montant, 0);
@@ -5099,13 +5201,13 @@ function SaisieJour() {
         display: 'flex',
         alignItems: 'center',
         gap: 10,
-        padding: '10px 12px',
-        marginBottom: 4,
-        borderRadius: 10,
+        padding: '11px 14px',
+        marginBottom: 5,
+        borderRadius: 11,
         border: '2px solid ' + (isSelected ? '#176B3A' : resteActe === 0 ? '#d1fae5' : '#eee'),
-        background: isSelected ? '#F0FDF4' : resteActe === 0 ? '#f9fef9' : '#fafafa',
+        background: isSelected ? '#F0FDF4' : resteActe === 0 ? '#f9fef9' : '#fff',
         cursor: resteActe === 0 ? 'default' : 'pointer',
-        opacity: resteActe === 0 ? .6 : 1
+        transition: '.1s'
       },
       onClick: () => resteActe > 0 && setPayFor({
         acte: l.acte,
@@ -5129,7 +5231,8 @@ function SaisieJour() {
       }
     }, "Dents : ", l.dents)), /*#__PURE__*/React.createElement("div", {
       style: {
-        textAlign: 'right'
+        textAlign: 'right',
+        flexShrink: 0
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -5137,29 +5240,56 @@ function SaisieJour() {
         fontSize: 13,
         color: resteActe === 0 ? '#2EA85A' : '#DC2626'
       }
-    }, resteActe === 0 ? 'Soldé ✓' : 'Reste ' + fmtMAD(resteActe))), isSelected && /*#__PURE__*/React.createElement(Icon, {
+    }, resteActe === 0 ? 'Soldé ✓' : 'Reste ' + fmtMAD(resteActe)), /*#__PURE__*/React.createElement("div", {
+      className: "muted",
+      style: {
+        fontSize: 11
+      }
+    }, fmtMAD(l.prix))), isSelected ? /*#__PURE__*/React.createElement(Icon, {
       n: "circle-check-filled",
       size: 20,
       color: "#176B3A"
+    }) : /*#__PURE__*/React.createElement(Icon, {
+      n: "circle",
+      size: 20,
+      color: "#ddd"
     }));
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "divider"
-  })), /*#__PURE__*/React.createElement("div", {
+  }))), payFor && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: 'btn ' + (newActe ? 'btn-pri' : 'btn-sec') + ' btn-sm',
-    onClick: () => {
-      setNewActe(!newActe);
-      setPayFor(null);
+      padding: '10px 14px',
+      background: '#F0FDF4',
+      borderRadius: 10,
+      marginBottom: 8,
+      fontWeight: 600,
+      color: '#176B3A',
+      fontSize: 13,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8
     }
   }, /*#__PURE__*/React.createElement(Icon, {
-    n: newActe ? 'circle-check-filled' : 'plus',
-    size: 15
-  }), " ", newActe ? 'Nouvel acte sélectionné' : 'Ajouter un nouvel acte'), newActe && /*#__PURE__*/React.createElement("div", {
+    n: "circle-check-filled",
+    size: 16
+  }), payFor.label, " \u2014 Reste : ", fmtMAD(payFor.reste))), saisieMode === 'newplan' && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(ActePicker, {
+    value: newPlanLignes,
+    onChange: setNewPlanLignes,
+    label: "Actes du plan"
+  }), newPlanLignes.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
-      marginTop: 10,
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '10px 14px',
+      background: '#F0FDF4',
+      borderRadius: 10,
+      marginTop: 8,
+      fontWeight: 700
+    }
+  }, /*#__PURE__*/React.createElement("span", null, "Total plan"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: '#176B3A'
+    }
+  }, fmtMAD(newPlanLignes.reduce((s, l) => s + (parseInt(l.prix) || 0), 0))))), saisieMode === 'isole' && /*#__PURE__*/React.createElement("div", {
+    style: {
       padding: '12px',
       background: '#FFFBEB',
       borderRadius: 10,
@@ -5172,7 +5302,7 @@ function SaisieJour() {
       gap: '0 12px'
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "Acte"
+    label: "Acte r\xE9alis\xE9"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
     value: acteLibre,
@@ -5188,36 +5318,33 @@ function SaisieJour() {
     placeholder: "0",
     value: prixLibre,
     onChange: e => setPrixLibre(e.target.value)
-  }))))), (payFor || newActe) && /*#__PURE__*/React.createElement(React.Fragment, null, payFor && /*#__PURE__*/React.createElement("div", {
+  })))), (saisieMode === 'plan' || saisieMode === 'isole' || saisieMode === 'newplan' && newPlanLignes.length > 0) && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "divider",
     style: {
-      padding: '10px 14px',
-      background: '#F0FDF4',
-      borderRadius: 10,
-      marginBottom: 12,
-      fontWeight: 600,
-      color: '#176B3A',
-      fontSize: 13
+      margin: '12px 0'
     }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "dental",
-    size: 15
-  }), " ", payFor.label, " \u2014 Reste : ", fmtMAD(payFor.reste)), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "Paiement aujourd'hui"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
       gap: '0 12px'
     }
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "Montant pay\xE9 aujourd'hui (MAD)"
+    label: "Montant pay\xE9 (MAD)"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "number",
     placeholder: "0 si rien pay\xE9",
     value: montant,
-    onChange: e => setMontant(e.target.value),
-    autoFocus: true
+    onChange: e => setMontant(e.target.value)
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Mode de paiement"
+    label: "Mode"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
     value: mode,
