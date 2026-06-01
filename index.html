@@ -2072,6 +2072,27 @@ function Login({
     size: 14
   }), " Acc\xE8s s\xE9curis\xE9")));
 }
+const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
+function canAccess(user, permKey) {
+  if (permKey === 'always') return true;
+  if (user.role === 'admin') return true;
+  if (permKey === 'settings_admin') return false;
+  return PERMS[user.role]?.[permKey] ?? false;
+}
+const PAGE_TITLES = {
+  dashboard: 'Tableau de bord',
+  patients: 'Patients',
+  saisie: 'Saisie du jour',
+  actes: 'Gérer les actes',
+  agenda: 'Rendez-vous',
+  prothese: 'Prothèses',
+  mutuelle: 'Mutuelles',
+  finances: 'Finances',
+  depenses: 'Dépenses',
+  stats: 'Statistiques',
+  historique: 'Historique',
+  settings: 'Réglages'
+};
 function AccountSwitcher() {
   const {
     user,
