@@ -3875,7 +3875,7 @@ function PatientsList() {
         if (!window.confirm('Supprimer le patient ' + p.prenom + ' ' + p.nom + ' ?')) {
           return;
         }
-        const idx = PATIENTS.indexOf(p);
+        const idx = PATIENTS.findIndex(x => x.id === p.id);
         if (idx > -1) {
           PATIENTS.splice(idx, 1);
         }
@@ -4357,7 +4357,7 @@ function PatientDetail({
     if (!window.confirm('Supprimer ce plan de traitement ? Action irréversible.')) {
       return;
     }
-    const i = PLANS.indexOf(pl);
+    const i = PLANS.findIndex(x => x.id === pl.id);
     if (i > -1) PLANS.splice(i, 1);
     SUPA.from('dx_plans').delete().eq('id', pl.id).catch(() => {});
     SUPA.from('dx_plan_lignes').delete().eq('plan_id', pl.id).catch(() => {});
@@ -5475,7 +5475,7 @@ function ActesGestion() {
       if (!window.confirm('Supprimer "' + a.nom + '" ?')) {
         return;
       }
-      const i = ACTES_NOM.indexOf(a);
+      const i = ACTES_NOM.findIndex(x => x.id === a.id);
       if (i > -1) ACTES_NOM.splice(i, 1);
       db.deleteActe(a.id).catch(() => {});
       r(x => x + 1);
@@ -6226,7 +6226,7 @@ function ProthActesGestion() {
         if (!window.confirm('Supprimer "' + a.nom + '" ?')) {
           return;
         }
-        const i = PROTH_ACTES_CAT.indexOf(a);
+        const i = PROTH_ACTES_CAT.findIndex(x => x.id === a.id);
         if (i > -1) PROTH_ACTES_CAT.splice(i, 1);
         PROTHESISTES.forEach(p => delete p.prix[a.id]);
         db.deleteProthActe(a.id).catch(() => {});
@@ -6440,7 +6440,7 @@ function LabosGestion() {
       if (!window.confirm('Supprimer ' + pr.nom + ' ?')) {
         return;
       }
-      const i = PROTHESISTES.indexOf(pr);
+      const i = PROTHESISTES.findIndex(x => x.id === pr.id);
       if (i > -1) PROTHESISTES.splice(i, 1);
       db.deleteProthesiste(pr.id).catch(() => {});
       r(x => x + 1);
@@ -6862,7 +6862,7 @@ function Depenses() {
         if (!window.confirm('Supprimer cette dépense ?')) {
           return;
         }
-        const i = DEPENSES.indexOf(d);
+        const i = DEPENSES.findIndex(x => x.id === d.id);
         if (i > -1) DEPENSES.splice(i, 1);
         db.deleteDepense && db.deleteDepense(d.id).catch(() => {});
         r(x => x + 1);
@@ -7830,7 +7830,7 @@ function MutuellesPage() {
         return;
       }
       db.deleteMutuelle(m.id).catch(() => {});
-      const i = MUT_DECLAREES.indexOf(m);
+      const i = MUT_DECLAREES.findIndex(x => x.id === m.id);
       if (i > -1) MUT_DECLAREES.splice(i, 1);
       r(x => x + 1);
       refresh();
@@ -8438,7 +8438,7 @@ function Settings() {
         if (!window.confirm('Supprimer utilisateur ' + u.prenom + ' ?')) {
           return;
         }
-        const i = USERS.indexOf(u);
+        const i = USERS.findIndex(x => x.id === u.id);
         if (i > -1) USERS.splice(i, 1);
         db.deleteUser(u.id).catch(() => {});
         r(x => x + 1);
