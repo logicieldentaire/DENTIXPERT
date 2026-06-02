@@ -616,7 +616,7 @@ const db = {
       montant: d.montant || 0,
       date: d.date,
       par: d.par
-    }).catch(() => {});
+    });
   },
   async updateDepense(d) {
     await SUPA.from('dx_depenses').update({
@@ -624,10 +624,24 @@ const db = {
       description: d.description,
       montant: d.montant || 0,
       date: d.date
-    }).eq('id', d.id).catch(() => {});
+    }).eq('id', d.id);
   },
   async deleteDepense(id) {
-    await SUPA.from('dx_depenses').delete().eq('id', id).catch(() => {});
+    await SUPA.from('dx_depenses').delete().eq('id', id);
+  },
+  async deletePatient(id) {
+    await SUPA.from('dx_patients').delete().eq('id', id);
+  },
+  async deletePlan(id) {
+    await SUPA.from('dx_plans').delete().eq('id', id);
+  },
+  async deletePlanLignes(planId) {
+    await SUPA.from('dx_plan_lignes').delete().eq('plan_id', planId);
+  },
+  async updateProthPayeLabo(id, val) {
+    await SUPA.from('dx_proth_travaux').update({
+      paye_labo: val
+    }).eq('id', id);
   },
   async addHistorique(h) {
     await SUPA.from('dx_historique').insert({
@@ -638,7 +652,7 @@ const db = {
       type: h.type,
       detail: h.detail,
       entite: h.entite || ''
-    }).catch(() => {});
+    });
   }
 };
 
@@ -3754,6 +3768,7 @@ function PatientsList() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('Tous');
   const [modal, setModal] = useState(false);
+  const [, forceUpdate] = useState(0);
   const canDelete = user.role === 'admin' || user.role === 'assistante';
   let list = PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel + (p.cin || '')).toLowerCase().includes(q.toLowerCase()));
   if (filter === 'Avec mutuelle') list = list.filter(p => p.mutuelle !== 'Aucune');
@@ -3879,12 +3894,13 @@ function PatientsList() {
         if (idx > -1) {
           PATIENTS.splice(idx, 1);
         }
-        SUPA.from('dx_patients').delete().eq('id', p.id).catch(() => {});
+        db.deletePatient && db.deletePatient(p.id);
         if (user.role === 'assistante') {
           addNotif('suppr', 'Suppression patient', user.prenom + ' a supprimé ' + p.prenom + ' ' + p.nom);
         }
         logAction('Suppression patient', 'delete', p.prenom + ' ' + p.nom, 'patient');
         toast('Patient supprimé', 'success');
+        forceUpdate(x => x + 1);
         refresh();
       }
     }, /*#__PURE__*/React.createElement(Icon, {
@@ -4359,11 +4375,14 @@ function PatientDetail({
     }
     const i = PLANS.findIndex(x => x.id === pl.id);
     if (i > -1) PLANS.splice(i, 1);
-    SUPA.from('dx_plans').delete().eq('id', pl.id).catch(() => {});
-    SUPA.from('dx_plan_lignes').delete().eq('plan_id', pl.id).catch(() => {});
+    db.deletePlan && db.deletePlan(pl.id);
+    db.deletePlanLignes && db.deletePlanLignes(pl.id);
     logAction('Suppression plan', 'delete', 'Plan supprimé — ' + pName(id), 'plan');
     toast('Plan supprimé', 'success');
     r(x => x + 1);
+    setForm({
+      ...p
+    });
     refresh();
   };
   return /*#__PURE__*/React.createElement("div", {
@@ -5953,9 +5972,7 @@ function Prothese() {
       onClick: e => {
         e.stopPropagation();
         t.payeLabo = !t.payeLabo;
-        db.updateProthStatut && SUPA.from('dx_proth_travaux').update({
-          paye_labo: t.payeLabo
-        }).eq('id', t.id).catch(() => {});
+        db.updateProthPayeLabo && db.updateProthPayeLabo(t.id, t.payeLabo);
         r(x => x + 1);
       }
     }, t.payeLabo ? /*#__PURE__*/React.createElement(Badge, {
