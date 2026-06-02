@@ -2664,11 +2664,11 @@ function Dashboard() {
   const caRange = payRange.reduce((s, p) => s + p.montant, 0);
   const patientsRange = [...new Set([...RDV.filter(r => inRange(r.date)).map(r => r.patient), ...payRange.map(p => p.patient)])];
   const rdvRange = RDV.filter(r => inRange(r.date));
-  const payMonth = PAIEMENTS.filter(p => p.date.startsWith('2026-05'));
-  const caMonth = payMonth.reduce((s, p) => s + p.montant, 0);
-  const factureMonth = PLANS.filter(pl => pl.date.startsWith('2026-05')).reduce((s, pl) => s + planTotal(pl), 0);
-  const resteTotal = PATIENTS.reduce((s, p) => s + Math.max(patientFinance(p.id).reste, 0), 0);
-  const nouveauxMois = PATIENTS.filter(p => p.creele && p.creele.startsWith('2026-05')).length;
+  // Calculs basés sur la période sélectionnée (pas en dur sur mai)
+  const payPeriode = PAIEMENTS.filter(p => inRange(p.date));
+  const caMonth = payPeriode.reduce((s, p) => s + p.montant, 0);
+  const factureMonth = PLANS.filter(pl => inRange(pl.date)).reduce((s, pl) => s + planTotal(pl), 0);
+  const nouveauxMois = PATIENTS.filter(p => p.creele && inRange(p.creele)).length;
   const periodLabel = from === to ? ddmm(from) : 'du ' + ddmm(from) + ' au ' + ddmm(to);
   if (isAssist) return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -2834,19 +2834,13 @@ function Dashboard() {
     iconBg: "rgba(46,168,90,.13)",
     iconColor: "#2EA85A",
     val: fmtMAD(caMonth),
-    lbl: "CA encaiss\xE9 (mai)"
+    lbl: "CA encaissé — " + periodLabel
   }), /*#__PURE__*/React.createElement(KPI, {
     ic: "user-plus",
     iconBg: "rgba(59,130,246,.13)",
     iconColor: "#3B82F6",
     val: nouveauxMois,
-    lbl: "nouveaux patients (mois)"
-  }), isAdmin && /*#__PURE__*/React.createElement(KPI, {
-    ic: "alert-circle",
-    iconBg: "rgba(220,38,38,.13)",
-    iconColor: "#DC2626",
-    val: fmtMAD(resteTotal),
-    lbl: "reste \xE0 encaisser"
+    lbl: "nouveaux patients — " + periodLabel
   }), /*#__PURE__*/React.createElement(KPI, {
     ic: "users",
     iconBg: "rgba(23,107,58,.13)",
@@ -7373,7 +7367,7 @@ function FinanceJour() {
     preset: preset,
     setPreset: setPreset
   }), /*#__PURE__*/React.createElement("div", {
-    className: "grid g3"
+    className: "grid g4"
   }, /*#__PURE__*/React.createElement(KPI, {
     ic: "cash",
     iconBg: "rgba(46,168,90,.13)",
@@ -7392,6 +7386,12 @@ function FinanceJour() {
     iconColor: "#E87722",
     val: pays.length,
     lbl: "transactions"
+  }), /*#__PURE__*/React.createElement(KPI, {
+    ic: "alert-circle",
+    iconBg: "rgba(220,38,38,.13)",
+    iconColor: "#DC2626",
+    val: fmtMAD(PATIENTS.reduce((s, p) => s + Math.max(patientFinance(p.id).reste, 0), 0)),
+    lbl: "reste \xE0 encaisser (total)"
   })), jours.length === 0 ? /*#__PURE__*/React.createElement("div", {
     className: "card"
   }, /*#__PURE__*/React.createElement(Empty, {
