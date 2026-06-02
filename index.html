@@ -629,6 +629,17 @@ const db = {
   async deleteDepense(id) {
     await SUPA.from('dx_depenses').delete().eq('id', id);
   },
+  async updatePaiement(p) {
+    await SUPA.from('dx_paiements').update({
+      date: p.date,
+      montant: p.montant || 0,
+      mode: p.mode,
+      note: p.note || ''
+    }).eq('id', p.id);
+  },
+  async deletePaiement(id) {
+    await SUPA.from('dx_paiements').delete().eq('id', id);
+  },
   async deletePatient(id) {
     await SUPA.from('dx_patients').delete().eq('id', id);
   },
@@ -4348,6 +4359,7 @@ function PatientDetail({
   const [planModal, setPlanModal] = useState(false);
   const [planEdit, setPlanEdit] = useState(null);
   const [payModal, setPayModal] = useState(null);
+  const [editPay, setEditPay] = useState(null);
   const [form, setForm] = useState(p);
   const [, r] = useState(0);
   if (!p) return /*#__PURE__*/React.createElement(Empty, {
@@ -4819,7 +4831,24 @@ function PatientDetail({
     onClick: () => setPayModal({
       existing: e
     })
-  }, /*#__PURE__*/React.createElement("td", null, ddmm(e.date)), /*#__PURE__*/React.createElement("td", {
+  }, /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement("button", {
+    style: {
+      background: 'none',
+      border: 'none',
+      cursor: 'pointer',
+      color: '#176B3A',
+      fontWeight: 600,
+      textDecoration: 'underline dotted',
+      padding: 0,
+      fontSize: 13
+    },
+    onClick: e2 => {
+      e2.stopPropagation();
+      setEditPay({
+        ...e
+      });
+    }
+  }, ddmm(e.date))), /*#__PURE__*/React.createElement("td", {
     style: {
       fontSize: 13
     }
@@ -4887,7 +4916,100 @@ function PatientDetail({
     actePreselect: payModal.acte,
     planPreselect: payModal.plan,
     onClose: () => setPayModal(null)
-  }));
+  }), editPay && /*#__PURE__*/React.createElement(Modal, {
+    title: "Modifier la transaction",
+    icon: "pencil",
+    onClose: () => setEditPay(null),
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+      className: "btn btn-sec",
+      onClick: () => setEditPay(null)
+    }, "Annuler"), /*#__PURE__*/React.createElement("button", {
+      className: "btn btn-pri",
+      onClick: () => {
+        const real = PAIEMENTS.find(x => x.id === editPay.id);
+        if (real) {
+          real.date = editPay.date;
+          real.montant = parseInt(editPay.montant) || 0;
+          real.mode = editPay.mode;
+          real.note = editPay.note;
+        }
+        db.updatePaiement && db.updatePaiement(editPay).catch(() => {});
+        toast('Transaction modifiée', 'success');
+        r(x => x + 1);
+        refresh();
+        setEditPay(null);
+      }
+    }, "Enregistrer"))
+  }, /*#__PURE__*/React.createElement(Field, {
+    label: "Date"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "date",
+    value: editPay.date,
+    onChange: e => setEditPay({
+      ...editPay,
+      date: e.target.value
+    })
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Montant (MAD)"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    type: "number",
+    value: editPay.montant,
+    onChange: e => setEditPay({
+      ...editPay,
+      montant: e.target.value
+    })
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Mode"
+  }, /*#__PURE__*/React.createElement("select", {
+    className: "inp",
+    value: editPay.mode,
+    onChange: e => setEditPay({
+      ...editPay,
+      mode: e.target.value
+    })
+  }, Object.entries(MODE_PAY).map(([k, v]) => /*#__PURE__*/React.createElement("option", {
+    key: k,
+    value: k
+  }, v)))), /*#__PURE__*/React.createElement(Field, {
+    label: "Note"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "inp",
+    value: editPay.note || '',
+    onChange: e => setEditPay({
+      ...editPay,
+      note: e.target.value
+    })
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      marginTop: 8
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    style: {
+      background: '#FEE2E2',
+      color: '#DC2626',
+      border: 'none'
+    },
+    onClick: () => {
+      if (!window.confirm('Supprimer cette transaction ?')) {
+        return;
+      }
+      const i = PAIEMENTS.findIndex(x => x.id === editPay.id);
+      if (i > -1) PAIEMENTS.splice(i, 1);
+      db.deletePaiement && db.deletePaiement(editPay.id).catch(() => {});
+      toast('Transaction supprimée', 'success');
+      r(x => x + 1);
+      refresh();
+      setEditPay(null);
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    n: "trash",
+    size: 15
+  }), " Supprimer"))));
 }
 
 /* ════════ SAISIE DU JOUR REDESIGNÉE ════════ */
