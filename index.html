@@ -3745,12 +3745,15 @@ function PatientsList() {
     user,
     setPage,
     toast,
-    confirmDelete
+    confirmDelete,
+    addNotif,
+    logAction,
+    refresh
   } = useApp();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('Tous');
   const [modal, setModal] = useState(false);
-  const canDelete = user.role === 'admin';
+  const canDelete = user.role === 'admin' || user.role === 'assistante';
   let list = PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel + (p.cin || '')).toLowerCase().includes(q.toLowerCase()));
   if (filter === 'Avec mutuelle') list = list.filter(p => p.mutuelle !== 'Aucune');
   if (filter === 'À risque') list = list.filter(p => p.risque);
@@ -3867,10 +3870,23 @@ function PatientsList() {
       onClick: e => e.stopPropagation()
     }, canDelete && /*#__PURE__*/React.createElement("button", {
       className: "btn-ghost",
-      onClick: () => confirmDelete('le patient ' + p.prenom + ' ' + p.nom, () => toast('Patient archivé (démo)', 'success'))
+      onClick: () => confirmDelete('le patient ' + p.prenom + ' ' + p.nom, () => {
+        const idx = PATIENTS.indexOf(p);
+        if (idx > -1) {
+          PATIENTS.splice(idx, 1);
+        }
+        SUPA.from('dx_patients').delete().eq('id', p.id).catch(() => {});
+        if (user.role === 'assistante') {
+          addNotif('suppr', 'Suppression patient', user.prenom + ' a supprimé ' + p.prenom + ' ' + p.nom);
+        }
+        logAction('Suppression patient', 'delete', p.prenom + ' ' + p.nom + ' supprimé', 'patient');
+        toast('Patient supprimé', 'success');
+        refresh();
+      })
     }, /*#__PURE__*/React.createElement(Icon, {
-      n: "dots-vertical",
-      size: 18
+      n: "trash",
+      size: 16,
+      color: "#DC2626"
     }))));
   }))))), modal && /*#__PURE__*/React.createElement(PatientForm, {
     onClose: () => setModal(false)
@@ -4335,9 +4351,12 @@ function PatientDetail({
   const TABS = [['infos', 'Infos', 'user'], ['traitement', 'Traitement', 'clipboard-list'], ['dents', 'Schéma', 'dental'], ['rdv', 'RDV', 'calendar']];
   const deletePlan = pl => confirmDelete('ce plan de traitement', () => {
     const i = PLANS.indexOf(pl);
-    PLANS.splice(i, 1);
+    if (i > -1) PLANS.splice(i, 1);
     SUPA.from('dx_plans').delete().eq('id', pl.id).catch(() => {});
+    SUPA.from('dx_plan_lignes').delete().eq('plan_id', pl.id).catch(() => {});
+    logAction('Suppression plan', 'delete', 'Plan supprimé — ' + pName(id), 'plan');
     toast('Plan supprimé', 'success');
+    r(x => x + 1);
     refresh();
   });
   return /*#__PURE__*/React.createElement("div", {
@@ -6195,8 +6214,9 @@ function ProthActesGestion() {
       className: "btn-ghost",
       onClick: () => confirmDelete('l\'acte "' + a.nom + '"', () => {
         const i = PROTH_ACTES_CAT.indexOf(a);
-        PROTH_ACTES_CAT.splice(i, 1);
+        if (i > -1) PROTH_ACTES_CAT.splice(i, 1);
         PROTHESISTES.forEach(p => delete p.prix[a.id]);
+        db.deleteProthActe(a.id).catch(() => {});
         r(x => x + 1);
         toast('Supprimé', 'success');
       })
@@ -6405,7 +6425,8 @@ function LabosGestion() {
     className: "btn-ghost",
     onClick: () => confirmDelete('le prothésiste ' + pr.nom, () => {
       const i = PROTHESISTES.indexOf(pr);
-      PROTHESISTES.splice(i, 1);
+      if (i > -1) PROTHESISTES.splice(i, 1);
+      db.deleteProthesiste(pr.id).catch(() => {});
       r(x => x + 1);
       toast('Supprimé', 'success');
     })
@@ -7788,8 +7809,9 @@ function MutuellesPage() {
     onClick: () => confirmDelete('cette déclaration', () => {
       db.deleteMutuelle(m.id).catch(() => {});
       const i = MUT_DECLAREES.indexOf(m);
-      MUT_DECLAREES.splice(i, 1);
+      if (i > -1) MUT_DECLAREES.splice(i, 1);
       r(x => x + 1);
+      refresh();
       toast('Supprimé', 'success');
     })
   }, /*#__PURE__*/React.createElement(Icon, {
