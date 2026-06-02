@@ -3871,7 +3871,10 @@ function PatientsList() {
       onClick: e => e.stopPropagation()
     }, canDelete && /*#__PURE__*/React.createElement("button", {
       className: "btn-ghost",
-      onClick: () => confirmDelete('le patient ' + p.prenom + ' ' + p.nom, () => {
+      onClick: () => {
+        if (!window.confirm('Supprimer le patient ' + p.prenom + ' ' + p.nom + ' ?')) {
+          return;
+        }
         const idx = PATIENTS.indexOf(p);
         if (idx > -1) {
           PATIENTS.splice(idx, 1);
@@ -3880,10 +3883,10 @@ function PatientsList() {
         if (user.role === 'assistante') {
           addNotif('suppr', 'Suppression patient', user.prenom + ' a supprimé ' + p.prenom + ' ' + p.nom);
         }
-        logAction('Suppression patient', 'delete', p.prenom + ' ' + p.nom + ' supprimé', 'patient');
+        logAction('Suppression patient', 'delete', p.prenom + ' ' + p.nom, 'patient');
         toast('Patient supprimé', 'success');
         refresh();
-      })
+      }
     }, /*#__PURE__*/React.createElement(Icon, {
       n: "trash",
       size: 16,
@@ -4350,7 +4353,10 @@ function PatientDetail({
     });
   };
   const TABS = [['infos', 'Infos', 'user'], ['traitement', 'Traitement', 'clipboard-list'], ['dents', 'Schéma', 'dental'], ['rdv', 'RDV', 'calendar']];
-  const deletePlan = pl => confirmDelete('ce plan de traitement', () => {
+  const deletePlan = pl => {
+    if (!window.confirm('Supprimer ce plan de traitement ? Action irréversible.')) {
+      return;
+    }
     const i = PLANS.indexOf(pl);
     if (i > -1) PLANS.splice(i, 1);
     SUPA.from('dx_plans').delete().eq('id', pl.id).catch(() => {});
@@ -4359,7 +4365,7 @@ function PatientDetail({
     toast('Plan supprimé', 'success');
     r(x => x + 1);
     refresh();
-  });
+  };
   return /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -5465,13 +5471,16 @@ function ActesGestion() {
     size: 16
   })), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
-    onClick: () => confirmDelete('l\'acte "' + a.nom + '"', () => {
+    onClick: () => {
+      if (!window.confirm('Supprimer "' + a.nom + '" ?')) {
+        return;
+      }
       const i = ACTES_NOM.indexOf(a);
-      ACTES_NOM.splice(i, 1);
+      if (i > -1) ACTES_NOM.splice(i, 1);
       db.deleteActe(a.id).catch(() => {});
       r(x => x + 1);
       toast('Supprimé', 'success');
-    })
+    }
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "trash",
     size: 16,
@@ -6213,14 +6222,17 @@ function ProthActesGestion() {
       size: 16
     })), /*#__PURE__*/React.createElement("button", {
       className: "btn-ghost",
-      onClick: () => confirmDelete('l\'acte "' + a.nom + '"', () => {
+      onClick: () => {
+        if (!window.confirm('Supprimer "' + a.nom + '" ?')) {
+          return;
+        }
         const i = PROTH_ACTES_CAT.indexOf(a);
         if (i > -1) PROTH_ACTES_CAT.splice(i, 1);
         PROTHESISTES.forEach(p => delete p.prix[a.id]);
         db.deleteProthActe(a.id).catch(() => {});
         r(x => x + 1);
         toast('Supprimé', 'success');
-      })
+      }
     }, /*#__PURE__*/React.createElement(Icon, {
       n: "trash",
       size: 16,
@@ -6424,13 +6436,16 @@ function LabosGestion() {
     size: 14
   }), " Modifier"), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
-    onClick: () => confirmDelete('le prothésiste ' + pr.nom, () => {
+    onClick: () => (() => {
+      if (!window.confirm('Supprimer ' + pr.nom + ' ?')) {
+        return;
+      }
       const i = PROTHESISTES.indexOf(pr);
       if (i > -1) PROTHESISTES.splice(i, 1);
       db.deleteProthesiste(pr.id).catch(() => {});
       r(x => x + 1);
       toast('Supprimé', 'success');
-    })
+    })()
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "trash",
     size: 16,
@@ -6843,13 +6858,16 @@ function Depenses() {
       size: 16
     })), /*#__PURE__*/React.createElement("button", {
       className: "btn-ghost",
-      onClick: () => confirmDelete('cette dépense', () => {
+      onClick: () => {
+        if (!window.confirm('Supprimer cette dépense ?')) {
+          return;
+        }
         const i = DEPENSES.indexOf(d);
-        DEPENSES.splice(i, 1);
+        if (i > -1) DEPENSES.splice(i, 1);
         db.deleteDepense && db.deleteDepense(d.id).catch(() => {});
         r(x => x + 1);
         toast('Supprimé', 'success');
-      })
+      }
     }, /*#__PURE__*/React.createElement(Icon, {
       n: "trash",
       size: 16,
@@ -7807,14 +7825,17 @@ function MutuellesPage() {
     size: 16
   })), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
-    onClick: () => confirmDelete('cette déclaration', () => {
+    onClick: () => (() => {
+      if (!window.confirm('Supprimer cette déclaration mutuelle ?')) {
+        return;
+      }
       db.deleteMutuelle(m.id).catch(() => {});
       const i = MUT_DECLAREES.indexOf(m);
       if (i > -1) MUT_DECLAREES.splice(i, 1);
       r(x => x + 1);
       refresh();
       toast('Supprimé', 'success');
-    })
+    })()
   }, /*#__PURE__*/React.createElement(Icon, {
     n: "trash",
     size: 16,
@@ -8413,12 +8434,16 @@ function Settings() {
       color: u.needsCode !== false ? '#E87722' : '#3B82F6'
     })), /*#__PURE__*/React.createElement("button", {
       className: "btn-ghost",
-      onClick: () => confirmDelete('l\'utilisateur ' + u.prenom, () => {
+      onClick: () => (() => {
+        if (!window.confirm('Supprimer utilisateur ' + u.prenom + ' ?')) {
+          return;
+        }
         const i = USERS.indexOf(u);
-        USERS.splice(i, 1);
+        if (i > -1) USERS.splice(i, 1);
+        db.deleteUser(u.id).catch(() => {});
         r(x => x + 1);
         toast('Supprimé', 'success');
-      })
+      })()
     }, /*#__PURE__*/React.createElement(Icon, {
       n: "trash",
       size: 16,
@@ -8751,17 +8776,8 @@ function App() {
     db.addHistorique(h).catch(() => {});
   };
   const confirmDelete = (label, onConfirm) => {
-    if (user.role !== 'admin') {
-      toast('⛔ Action refusée — demande à l\'administrateur', 'error');
-      addNotif('suppr', 'Tentative de suppression', user.prenom + ' a tenté de supprimer ' + label);
-      return;
-    }
-    setDelTarget({
-      label,
-      onConfirm
-    });
-    setDelStep(1);
-  };
+    onConfirm();
+  }; // remplacé par window.confirm dans chaque composant
   const logout = () => {
     try {
       sessionStorage.removeItem('dx_user');
