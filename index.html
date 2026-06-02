@@ -645,6 +645,7 @@ const db = {
 /* ════════ REALTIME — données partagées entre tous les utilisateurs ════════ */
 let _realtimeRefresh = null;
 function initRealtime(refreshFn) {
+  return; // désactivé temporairement
   _realtimeRefresh = refreshFn;
   try {
     SUPA.channel('dx-changes').on('postgres_changes', {
@@ -8925,16 +8926,10 @@ function App() {
     n: t.type === 'success' ? 'circle-check-filled' : t.type === 'error' ? 'alert-circle' : 'alert-triangle',
     size: 18
   }), t.msg))), delTarget && /*#__PURE__*/React.createElement(Modal, {
-    title: delStep === 1 ? 'Confirmer la suppression' : 'Suppression définitive',
+    title: "Confirmer la suppression",
     icon: "alert-triangle",
     onClose: () => setDelTarget(null),
-    footer: delStep === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-sec",
-      onClick: () => setDelTarget(null)
-    }, "Annuler"), /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-dan",
-      onClick: () => setDelStep(2)
-    }, "Continuer")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
       className: "btn btn-sec",
       onClick: () => setDelTarget(null)
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
@@ -8943,12 +8938,12 @@ function App() {
         delTarget.onConfirm();
         setDelTarget(null);
       }
-    }, "Supprimer d\xE9finitivement"))
+    }, "Supprimer"))
   }, /*#__PURE__*/React.createElement("p", {
     style: {
       fontSize: 14
     }
-  }, delStep === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, "Supprimer ", /*#__PURE__*/React.createElement("b", null, delTarget.label), " ? Action irr\xE9versible.") : /*#__PURE__*/React.createElement(React.Fragment, null, "Confirmer la suppression d\xE9finitive de ", /*#__PURE__*/React.createElement("b", null, delTarget.label), "."))));
+  }, "Supprimer ", /*#__PURE__*/React.createElement("b", null, delTarget.label), " ? Cette action est irr\xE9versible.")));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
 </script>
