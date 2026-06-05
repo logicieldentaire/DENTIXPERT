@@ -7686,9 +7686,9 @@ function Permissions() {
   const [, r] = useState(0);
   const toggle = (role, key) => {
     PERMS[role][key] = !PERMS[role][key];
-    db.savePermissions(role, {
-      ...PERMS[role]
-    }).catch(() => {});
+    try {
+      localStorage.setItem('dx_perms', JSON.stringify(PERMS));
+    } catch (e) {}
     r(x => x + 1);
     toast('Permission mise à jour ✓', 'success');
   };
@@ -8877,6 +8877,19 @@ function App() {
   const [, setTick] = useState(0);
   const refresh = () => setTick(t => t + 1);
   useEffect(() => {
+    // Charger permissions depuis localStorage
+    try {
+      const saved = localStorage.getItem('dx_perms');
+      if (saved) {
+        const p = JSON.parse(saved);
+        Object.keys(p).forEach(role => {
+          if (PERMS[role]) PERMS[role] = {
+            ...PERMS[role],
+            ...p[role]
+          };
+        });
+      }
+    } catch (e) {}
     loadAllData().then(() => {
       setAppLoading(false);
       initRealtime(() => setTick(t => t + 1));
