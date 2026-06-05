@@ -268,7 +268,7 @@ const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
 const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 async function loadAllData() {
-  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*')]);
+  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
   if (rU.data) USERS = rU.data;
   if (rP.data) PATIENTS = rP.data;
@@ -653,6 +653,12 @@ const db = {
     await SUPA.from('dx_proth_travaux').update({
       paye_labo: val
     }).eq('id', id);
+  },
+  async savePermissions(role, perms) {
+    await SUPA.from('dx_permissions').upsert({
+      role,
+      perms
+    });
   },
   async addHistorique(h) {
     await SUPA.from('dx_historique').insert({
@@ -7680,8 +7686,11 @@ function Permissions() {
   const [, r] = useState(0);
   const toggle = (role, key) => {
     PERMS[role][key] = !PERMS[role][key];
+    db.savePermissions(role, {
+      ...PERMS[role]
+    }).catch(() => {});
     r(x => x + 1);
-    toast('Permission mise à jour', 'success');
+    toast('Permission mise à jour ✓', 'success');
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "card card-pad"
