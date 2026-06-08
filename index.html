@@ -272,12 +272,15 @@ textarea.inp{resize:vertical;min-height:64px;}
   // Charger dépenses depuis Supabase
   if(rDep && rDep.data){
     DEPENSES = rDep.data;
+  }
+  if(rPoint && rPoint.data){
+    POINTAGES = rPoint.data;
   }═══════ SUPABASE CLIENT ════════ */
 const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
 const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 async function loadAllData() {
-  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*')]);
+  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
   if (rU.data) USERS = rU.data;
   if (rP.data) PATIENTS = rP.data;
@@ -909,7 +912,8 @@ let PERMS = {
     stats: false,
     historique: false,
     mutuelle: true,
-    depenses: false
+    depenses: false,
+    pointage: false
   },
   assistante: {
     patients: true,
@@ -921,7 +925,8 @@ let PERMS = {
     stats: false,
     historique: false,
     mutuelle: true,
-    depenses: false
+    depenses: false,
+    pointage: false
   }
 };
 const PERM_LABELS = {
@@ -933,6 +938,7 @@ const PERM_LABELS = {
   mutuelle: 'Mutuelles',
   finances: 'Finances',
   depenses: 'Dépenses',
+  pointage: 'Pointage',
   stats: 'Statistiques',
   historique: 'Historique'
 };
@@ -1949,7 +1955,7 @@ function PeriodFilter({
     }
   })));
 }
-const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
+const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['clock', 'Pointage', 'pointage', 'pointage'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
 function canAccess(user, permKey) {
   if (permKey === 'always') return true;
   if (user.role === 'admin') return true;
@@ -1966,6 +1972,7 @@ const PAGE_TITLES = {
   mutuelle: 'Mutuelles',
   finances: 'Finances',
   depenses: 'Dépenses',
+  pointage: 'Pointage',
   stats: 'Statistiques',
   historique: 'Historique',
   settings: 'Réglages'
@@ -2405,7 +2412,7 @@ function Topbar({
   const [nOpen, setNOpen] = useState(false);
   const unread = notifs.filter(n => !n.lu).length;
   const results = q.length > 0 ? PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel).toLowerCase().includes(q.toLowerCase())).slice(0, 5) : [];
-  const today = new Date().toLocaleDateString('fr-FR', {
+  const todayLabel = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -2466,7 +2473,7 @@ function Topbar({
     className: "tb-right"
   }, /*#__PURE__*/React.createElement("span", {
     className: "tb-date"
-  }, today), /*#__PURE__*/React.createElement("div", {
+  }, todayLabel), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative'
     },
@@ -2652,6 +2659,12 @@ function Dashboard() {
   const rdvRange = RDV.filter(r => inRange(r.date));
   // Calculs basés sur la période sélectionnée (pas en dur sur mai)
   const payPeriode = PAIEMENTS.filter(p => inRange(p.date));
+  // Patients du jour (avec ET sans paiement)
+  const todayDate = TODAY;
+  const paiementsAujourdhui = PAIEMENTS.filter(p => p.date === todayDate);
+  const patientsPayesAujourd = [...new Set(paiementsAujourdhui.filter(p=>p.montant>0).map(p=>p.patient))];
+  const patientsNonPayesAujourd = [...new Set(paiementsAujourdhui.filter(p=>p.montant===0).map(p=>p.patient))];
+  const allPatientsAujourd = [...new Set(paiementsAujourdhui.map(p=>p.patient))];
   const caMonth = payPeriode.reduce((s, p) => s + p.montant, 0);
   const factureMonth = PLANS.filter(pl => inRange(pl.date)).reduce((s, pl) => s + planTotal(pl), 0);
   const nouveauxMois = PATIENTS.filter(p => p.creele && inRange(p.creele)).length;
@@ -2802,6 +2815,12 @@ function Dashboard() {
     iconColor: "#176B3A",
     val: PATIENTS.length,
     lbl: "patients enregistr\xE9s"
+  }), /*#__PURE__*/React.createElement(KPI, {
+    ic: "users",
+    iconBg: "rgba(46,168,90,.13)",
+    iconColor: "#2EA85A",
+    val: allPatientsAujourd.length + " (" + patientsPayesAujourd.length + " p/ " + patientsNonPayesAujourd.length + " non payés"),
+    lbl: "patients aujourd'hui (payé/non payé)"
   })), /*#__PURE__*/React.createElement("div", {
     className: "grid g6040"
   }, /*#__PURE__*/React.createElement("div", {
@@ -4160,6 +4179,7 @@ function PayModal({
           plan: plan || null,
           acte,
           date: TODAY,
+          heure: new Date().toTimeString().slice(0,5),
           montant: m,
           mode,
           par: user.id,
@@ -4790,7 +4810,7 @@ function PatientDetail({
         ...e
       });
     }
-  }, ddmm(e.date))), /*#__PURE__*/React.createElement("td", {
+  }, (ddmm(e.date) + (e.heure ? ' ' + e.heure : ''))), /*#__PURE__*/React.createElement("td", {
     style: {
       fontSize: 13
     }
@@ -5010,6 +5030,7 @@ function SaisieJour() {
           plan: planId,
           acte: newPlanLignes[0].acte,
           date: TODAY,
+          heure: new Date().toTimeString().slice(0,5),
           montant: m,
           mode,
           par: user.id,
@@ -5042,6 +5063,7 @@ function SaisieJour() {
         plan: planId,
         acte: acteLibre,
         date: TODAY,
+        heure: new Date().toTimeString().slice(0,5),
         montant: m,
         mode,
         par: user.id,
@@ -5058,6 +5080,7 @@ function SaisieJour() {
         plan: payFor.plan,
         acte: payFor.acte,
         date: TODAY,
+        heure: new Date().toTimeString().slice(0,5),
         montant: m,
         mode,
         par: user.id,
@@ -8263,6 +8286,167 @@ function Stats() {
     }
   }, fmtMAD(p.paye))))))))));
 }
+
+/* ═══════════════════════════════════════
+   SYSTÈME DE POINTAGE
+   ═══════════════════════════════════════ */
+let POINTAGES = [];
+
+function Pointage() {
+  const { user, toast } = useApp();
+  const [, r] = useState(0);
+  const [filter, setFilter] = useState('semaine');
+  
+  const today = TODAY;
+  const now = new Date().toTimeString().slice(0,5);
+  
+  // Pointage du user aujourd'hui
+  const myToday = POINTAGES.find(p => p.user_id === user.id && p.date === today);
+  
+  const handleEntree = async () => {
+    if(myToday && myToday.heure_entree) { toast("Entrée déjà enregistrée : " + myToday.heure_entree, 'error'); return; }
+    const np = { id: 'pt'+Date.now(), user_id: user.id, date: today, heure_entree: now, heure_sortie: null };
+    POINTAGES.push(np);
+    try { await SUPA.from('dx_pointage').insert(np); } catch(e) {}
+    r(x=>x+1);
+    toast('Entrée enregistrée à ' + now + ' ✓', 'success');
+  };
+  
+  const handleSortie = async () => {
+    if(!myToday || !myToday.heure_entree) { toast("Vous n'avez pas encore enregistré votre entrée.", 'error'); return; }
+    if(myToday.heure_sortie) { toast("Sortie déjà enregistrée : " + myToday.heure_sortie, 'error'); return; }
+    myToday.heure_sortie = now;
+    try { await SUPA.from('dx_pointage').update({heure_sortie: now}).eq('id', myToday.id); } catch(e) {}
+    r(x=>x+1);
+    toast('Sortie enregistrée à ' + now + ' ✓', 'success');
+  };
+  
+  // Calcul durée
+  const duree = (entree, sortie) => {
+    if(!entree || !sortie) return '—';
+    const [h1,m1] = entree.split(':').map(Number);
+    const [h2,m2] = sortie.split(':').map(Number);
+    const diff = (h2*60+m2) - (h1*60+m1);
+    if(diff <= 0) return '—';
+    return Math.floor(diff/60)+'h'+String(diff%60).padStart(2,'0');
+  };
+  
+  // Filtrer les pointages
+  const now7 = new Date(); now7.setDate(now7.getDate()-6);
+  const week0 = now7.toISOString().slice(0,10);
+  const now30 = new Date(); now30.setDate(now30.getDate()-29);
+  const month0 = now30.toISOString().slice(0,10);
+  
+  const isAdmin = user.role === 'admin';
+  let list = isAdmin ? POINTAGES : POINTAGES.filter(p=>p.user_id===user.id);
+  if(filter==='jour') list = list.filter(p=>p.date===today);
+  else if(filter==='semaine') list = list.filter(p=>p.date>=week0);
+  else if(filter==='mois') list = list.filter(p=>p.date>=month0);
+  list = list.sort((a,b)=>b.date.localeCompare(a.date)||b.heure_entree.localeCompare(a.heure_entree||''));
+  
+  const statut = myToday ? (myToday.heure_sortie ? 'sorti' : 'present') : 'absent';
+  const statutColors = { present: '#2EA85A', sorti: '#3B82F6', absent: '#9CA3AF' };
+  const statutLabels = { present: 'Au cabinet', sorti: 'Parti', absent: "Pas encore arrivé" };
+  
+  return /*#__PURE__*/React.createElement("div", { style:{display:'flex',flexDirection:'column',gap:16} },
+    
+    /* Carte statut + boutons */
+    /*#__PURE__*/React.createElement("div", { className:"card card-pad", style:{background:'linear-gradient(120deg,#111,#222)',border:'none'} },
+      /*#__PURE__*/React.createElement("div", { style:{display:'flex',alignItems:'center',gap:14,marginBottom:20} },
+        /*#__PURE__*/React.createElement("div", { style:{width:52,height:52,borderRadius:'50%',background:statutColors[statut]+'33',border:'2px solid '+statutColors[statut],display:'flex',alignItems:'center',justifyContent:'center'} },
+          /*#__PURE__*/React.createElement(Icon, {n:"clock",size:24,color:statutColors[statut]})
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("div", { style:{color:'#fff',fontWeight:700,fontSize:16} }, user.role==='assistante'?user.prenom+' '+user.nom:'Dr. '+user.prenom+' '+user.nom),
+          /*#__PURE__*/React.createElement("div", { style:{color:statutColors[statut],fontWeight:600,fontSize:13,marginTop:2} }, statutLabels[statut]),
+          myToday && /*#__PURE__*/React.createElement("div", { style:{color:'#888',fontSize:12,marginTop:2} },
+            myToday.heure_entree ? '↓ Entrée '+myToday.heure_entree : '',
+            myToday.heure_sortie ? '  ↑ Sortie '+myToday.heure_sortie : '',
+            myToday.heure_entree && myToday.heure_sortie ? '  ('+duree(myToday.heure_entree,myToday.heure_sortie)+')' : ''
+          )
+        ),
+        /*#__PURE__*/React.createElement("div", { style:{marginLeft:'auto',textAlign:'right'} },
+          /*#__PURE__*/React.createElement("div", { style:{color:'#fff',fontWeight:700,fontSize:18} }, new Date().toTimeString().slice(0,5)),
+          /*#__PURE__*/React.createElement("div", { style:{color:'#666',fontSize:12} }, new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { style:{display:'flex',gap:12} },
+        /*#__PURE__*/React.createElement("button", {
+          className:"btn",
+          style:{flex:1,height:52,fontSize:15,fontWeight:700,background:statut==='absent'?'#2EA85A':'#333',color:statut==='absent'?'#fff':'#666',border:'none',justifyContent:'center',gap:10},
+          onClick: handleEntree,
+          disabled: statut !== 'absent'
+        },
+          /*#__PURE__*/React.createElement(Icon, {n:"login",size:20,color:statut==='absent'?'#fff':'#666'}),
+          "Je suis arrivé au cabinet"
+        ),
+        /*#__PURE__*/React.createElement("button", {
+          className:"btn",
+          style:{flex:1,height:52,fontSize:15,fontWeight:700,background:statut==='present'?'#DC2626':'#333',color:statut==='present'?'#fff':'#666',border:'none',justifyContent:'center',gap:10},
+          onClick: handleSortie,
+          disabled: statut !== 'present'
+        },
+          /*#__PURE__*/React.createElement(Icon, {n:"logout",size:20,color:statut==='present'?'#fff':'#666'}),
+          "Je quitte le cabinet"
+        )
+      )
+    ),
+    
+    /* Historique pointage */
+    /*#__PURE__*/React.createElement("div", { className:"card card-pad" },
+      /*#__PURE__*/React.createElement("div", { className:"sec-head",style:{marginBottom:12} },
+        /*#__PURE__*/React.createElement("div", { className:"sec-title" }, 
+          /*#__PURE__*/React.createElement(Icon, {n:"history",size:18,color:"#176B3A"}), " Historique"
+        ),
+        /*#__PURE__*/React.createElement("div", { className:"pills" },
+          [['jour',"Auj."],['semaine','Semaine'],['mois','Mois'],['tout','Tout']].map(([k,l]) =>
+            /*#__PURE__*/React.createElement("button", {key:k,className:'pill'+(filter===k?' on':''),onClick:()=>setFilter(k)}, l)
+          )
+        )
+      ),
+      list.length === 0
+        ? /*#__PURE__*/React.createElement(Empty, {icon:"clock-off",msg:"Aucun pointage sur cette période"})
+        : /*#__PURE__*/React.createElement("div", { className:"tbl-scroll" },
+            /*#__PURE__*/React.createElement("table", { className:"tbl" },
+              /*#__PURE__*/React.createElement("thead", null,
+                /*#__PURE__*/React.createElement("tr", null,
+                  /*#__PURE__*/React.createElement("th", null, "Date"),
+                  isAdmin && /*#__PURE__*/React.createElement("th", null, "Utilisateur"),
+                  /*#__PURE__*/React.createElement("th", null, "Entrée"),
+                  /*#__PURE__*/React.createElement("th", null, "Sortie"),
+                  /*#__PURE__*/React.createElement("th", null, "Durée")
+                )
+              ),
+              /*#__PURE__*/React.createElement("tbody", null,
+                list.map(p => {
+                  const u = USERS.find(x=>x.id===p.user_id);
+                  const d = duree(p.heure_entree, p.heure_sortie);
+                  return /*#__PURE__*/React.createElement("tr", {key:p.id},
+                    /*#__PURE__*/React.createElement("td", null, ddmm(p.date)),
+                    isAdmin && /*#__PURE__*/React.createElement("td", null,
+                      /*#__PURE__*/React.createElement("div", {style:{display:'flex',alignItems:'center',gap:8}},
+                        /*#__PURE__*/React.createElement(Avatar, {prenom:u?.prenom||'?',nom:u?.nom||'',size:26}),
+                        u?.role==='assistante'?u?.prenom:('Dr. '+u?.prenom)
+                      )
+                    ),
+                    /*#__PURE__*/React.createElement("td", null,
+                      p.heure_entree ? /*#__PURE__*/React.createElement("span", {style:{fontWeight:700,color:'#2EA85A'}}, "↓ "+p.heure_entree) : /*#__PURE__*/React.createElement("span", {className:"muted"}, "—")
+                    ),
+                    /*#__PURE__*/React.createElement("td", null,
+                      p.heure_sortie ? /*#__PURE__*/React.createElement("span", {style:{fontWeight:700,color:'#DC2626'}}, "↑ "+p.heure_sortie) : /*#__PURE__*/React.createElement("span", {className:"muted"}, "En cours…")
+                    ),
+                    /*#__PURE__*/React.createElement("td", null,
+                      /*#__PURE__*/React.createElement("span", {style:{fontWeight:600,color:'#3B82F6'}}, d)
+                    )
+                  );
+                })
+              )
+            )
+          )
+    )
+  );
+}
+
 function Historique() {
   const {user, refresh} = useApp();
   const [filter, setFilter] = useState('Tous');
@@ -8993,6 +9177,7 @@ function App() {
     mutuelle: 'mutuelle',
     finances: 'finances',
     depenses: 'depenses',
+    pointage: 'pointage',
     stats: 'stats',
     historique: 'historique',
     settings: 'settings_admin',
@@ -9024,22 +9209,7 @@ function App() {
   }
   let view;
   if (page.startsWith('patient:')) view = /*#__PURE__*/React.createElement(PatientDetail, {
-    id: page.split(':')(()=>{
-  const months=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-  const now=new Date();
-  return [3,2,1,0].map(offset=>{
-    const d=new Date(now.getFullYear(),now.getMonth()-offset,1);
-    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
-    const pays=PAIEMENTS.filter(p=>p.date&&p.date.startsWith(key));
-    const plans=PLANS.filter(pl=>pl.date&&pl.date.startsWith(key));
-    return {
-      l:months[d.getMonth()],
-      a:plans.reduce((s,pl)=>s+planTotal(pl),0),
-      b:pays.reduce((s,p)=>s+p.montant,0)
-    };
-  });
-})()
-  });else switch (page) {
+    id: page.split(':')[1]  });else switch (page) {
     case 'dashboard':
       view = /*#__PURE__*/React.createElement(Dashboard, null);
       break;
@@ -9066,6 +9236,9 @@ function App() {
       break;
     case 'depenses':
       view = /*#__PURE__*/React.createElement(Depenses, null);
+      break;
+    case 'pointage':
+      view = /*#__PURE__*/React.createElement(Pointage, null);
       break;
     case 'stats':
       view = /*#__PURE__*/React.createElement(Stats, null);
