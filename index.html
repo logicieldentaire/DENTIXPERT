@@ -2405,7 +2405,7 @@ function Topbar({
   const [nOpen, setNOpen] = useState(false);
   const unread = notifs.filter(n => !n.lu).length;
   const results = q.length > 0 ? PATIENTS.filter(p => (p.prenom + ' ' + p.nom + p.tel).toLowerCase().includes(q.toLowerCase())).slice(0, 5) : [];
-  const today = new Date(2026, 4, 24).toLocaleDateString('fr-FR', {
+  const today = new Date().toLocaleDateString('fr-FR', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -2944,23 +2944,21 @@ function Dashboard() {
     size: 18,
     color: "#176B3A"
   }), " Factur\xE9 vs Encaiss\xE9 (mois)")), /*#__PURE__*/React.createElement(BarChartDual, {
-    data: [{
-      l: 'Fév',
-      a: 19800,
-      b: 18200
-    }, {
-      l: 'Mar',
-      a: 24500,
-      b: 22000
-    }, {
-      l: 'Avr',
-      a: 27000,
-      b: 25500
-    }, {
-      l: 'Mai',
-      a: factureMonth,
-      b: caMonth
-    }]
+    data: (()=>{
+      const months=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+      const now=new Date();
+      return [3,2,1,0].map(offset=>{
+        const d=new Date(now.getFullYear(),now.getMonth()-offset,1);
+        const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+        const paysMois=PAIEMENTS.filter(p=>p.date&&p.date.startsWith(key));
+        const plansMois=PLANS.filter(pl=>pl.date&&pl.date.startsWith(key));
+        return {
+          l:months[d.getMonth()],
+          a:plansMois.reduce((s,pl)=>s+planTotal(pl),0),
+          b:paysMois.reduce((s,p)=>s+p.montant,0)
+        };
+      });
+    })()
   }))));
 }
 
@@ -5749,9 +5747,9 @@ function Agenda() {
   const hours = [];
   for (let h = 8; h <= 19; h++) hours.push(h);
   const week = weekDates(TODAY);
-  const monthStart = new Date(2026, 4, 1);
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
   const firstDow = (monthStart.getDay() + 6) % 7;
-  const daysInMonth = 31;
+  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
   const cells = [];
   for (let i = 0; i < firstDow; i++) cells.push(null);
   for (let d = 1; d <= daysInMonth; d++) cells.push('2026-05-' + String(d).padStart(2, '0'));
@@ -9026,7 +9024,21 @@ function App() {
   }
   let view;
   if (page.startsWith('patient:')) view = /*#__PURE__*/React.createElement(PatientDetail, {
-    id: page.split(':')[1]
+    id: page.split(':')(()=>{
+  const months=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  const now=new Date();
+  return [3,2,1,0].map(offset=>{
+    const d=new Date(now.getFullYear(),now.getMonth()-offset,1);
+    const key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const pays=PAIEMENTS.filter(p=>p.date&&p.date.startsWith(key));
+    const plans=PLANS.filter(pl=>pl.date&&pl.date.startsWith(key));
+    return {
+      l:months[d.getMonth()],
+      a:plans.reduce((s,pl)=>s+planTotal(pl),0),
+      b:pays.reduce((s,p)=>s+p.montant,0)
+    };
+  });
+})()
   });else switch (page) {
     case 'dashboard':
       view = /*#__PURE__*/React.createElement(Dashboard, null);
