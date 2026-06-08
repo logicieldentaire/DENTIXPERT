@@ -2981,7 +2981,7 @@ function Dashboard() {
       fontWeight: 500,
       fontSize: 13
     }
-  }, pName(e.patient)), /*#__PURE__*/React.createElement("div", {
+  }, pName(e.patient) === "?" ? /*#__PURE__*/React.createElement("span", {style:{color:"#DC2626",fontStyle:"italic",fontSize:12}}, "Patient supprimé") : pName(e.patient)), /*#__PURE__*/React.createElement("div", {
     className: "muted",
     style: {
       fontSize: 11.5
@@ -7560,7 +7560,7 @@ function FinanceJour() {
       className: "num"
     }, "Montant"), /*#__PURE__*/React.createElement("th", null, "Mode"), /*#__PURE__*/React.createElement("th", null, "Par"))), /*#__PURE__*/React.createElement("tbody", null, dayPays.map(p => /*#__PURE__*/React.createElement("tr", {
       key: p.id
-    }, /*#__PURE__*/React.createElement("td", null, pName(p.patient)), /*#__PURE__*/React.createElement("td", {
+    }, /*#__PURE__*/React.createElement("td", null, pName(p.patient) === "?" ? /*#__PURE__*/React.createElement("span", {style:{color:"#DC2626",fontStyle:"italic",fontSize:12}}, "Patient supprimé") : pName(p.patient)), /*#__PURE__*/React.createElement("td", {
       className: "muted"
     }, p.acte ? acteName(p.acte) : '—'), /*#__PURE__*/React.createElement("td", {
       className: "num",
