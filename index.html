@@ -1900,11 +1900,11 @@ function PeriodFilter({
       setFrom(w[0]);
       setTo(w[6]);
     } else if (p === 'mois') {
-      setFrom('2026-05-01');
-      setTo('2026-05-31');
+      setFrom(new Date().toISOString().slice(0,8)+'01');
+      setTo((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
     } else if (p === 'trim') {
       setFrom('2026-03-01');
-      setTo('2026-05-31');
+      setTo((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
     } else if (p === 'annee') {
       setFrom('2026-01-01');
       setTo('2026-12-31');
@@ -7065,8 +7065,8 @@ function Depenses() {
     refresh
   } = useApp();
   const [tab, setTab] = useState('liste');
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-31');
+  const [from, setFrom] = useState(new Date().toISOString().slice(0,8)+'01');
+  const [to, setTo] = useState((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
   const [preset, setPreset] = useState('mois');
   const [modal, setModal] = useState(false);
   const [editDep, setEditDep] = useState(null);
@@ -7694,8 +7694,8 @@ function Finances() {
   }, l))), tab === 'jour' && /*#__PURE__*/React.createElement(FinanceJour, null), tab === 'salaire' && /*#__PURE__*/React.createElement(SimulSalaire, null), tab === 'perms' && /*#__PURE__*/React.createElement(Permissions, null));
 }
 function FinanceJour() {
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-31');
+  const [from, setFrom] = useState(new Date().toISOString().slice(0,8)+'01');
+  const [to, setTo] = useState((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
   const [preset, setPreset] = useState('mois');
   const inRange = d => d >= from && d <= to;
   const pays = PAIEMENTS.filter(p => inRange(p.date)).sort((a, b) => b.date.localeCompare(a.date));
@@ -7807,8 +7807,8 @@ function SimulSalaire() {
   const remp = USERS.find(u => u.role === 'dentiste_remplacant');
   const [pct, setPct] = useState(40);
   const [praticien, setPraticien] = useState(remp.id);
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-31');
+  const [from, setFrom] = useState(new Date().toISOString().slice(0,8)+'01');
+  const [to, setTo] = useState((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
   const [preset, setPreset] = useState('mois');
   const inRange = d => d >= from && d <= to;
   const plansP = PLANS.filter(pl => pl.praticien === praticien);
@@ -8391,8 +8391,8 @@ function MutFormulaireRapide({
 
 /* ════════ STATS ════════ */
 function Stats() {
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-31');
+  const [from, setFrom] = useState(new Date().toISOString().slice(0,8)+'01');
+  const [to, setTo] = useState((()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).toISOString().slice(0,10);})());
   const [preset, setPreset] = useState('mois');
   const inRange = d => d >= from && d <= to;
   const paysR = PAIEMENTS.filter(p => inRange(p.date));
