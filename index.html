@@ -337,8 +337,15 @@ async function loadAllData() {
   if (rPoint && rPoint.data) {
     POINTAGES = rPoint.data;
   }
-  if (rCatDep && rCatDep.data && rCatDep.data.length > 0) {
-    CATEGORIES_DEP = rCatDep.data;
+  if (rCatDep && rCatDep.data) {
+    if (rCatDep.data.length > 0) {
+      CATEGORIES_DEP = rCatDep.data;
+    } else {
+      // Table vide - sauvegarder les catégories par défaut
+      CATEGORIES_DEP.forEach(c => {
+        SUPA.from('dx_categories_depenses').upsert({id:c.id,nom:c.nom,couleur:c.couleur}).catch(()=>{});
+      });
+    }
   }
 }
 
