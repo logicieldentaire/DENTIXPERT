@@ -271,7 +271,7 @@ const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
 const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 async function loadAllData() {
-  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*')]);
+  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint, rCatDep] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*'), SUPA.from('dx_categories_depenses').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
   if (rU.data) USERS = rU.data;
   if (rP.data) PATIENTS = rP.data;
@@ -336,6 +336,9 @@ async function loadAllData() {
   }
   if (rPoint && rPoint.data) {
     POINTAGES = rPoint.data;
+  }
+  if (rCatDep && rCatDep.data && rCatDep.data.length > 0) {
+    CATEGORIES_DEP = rCatDep.data;
   }
 }
 
@@ -624,6 +627,9 @@ const db = {
   async deleteProthActe(id) {
     await SUPA.from('dx_proth_actes').delete().eq('id', id);
     await SUPA.from('dx_proth_tarifs').delete().eq('acte_id', id);
+  },
+  async saveCategorieDep(c) {
+    try {await SUPA.from('dx_categories_depenses').upsert({id:c.id,nom:c.nom,couleur:c.couleur||'#6B7280'});} catch(e) {}
   },
   async addDepense(d) {
     await SUPA.from('dx_depenses').insert({
@@ -6689,11 +6695,9 @@ function ProthActesGestion() {
       disabled: !ef.nom,
       onClick: () => {
         const id = 'pa' + Date.now();
-        PROTH_ACTES_CAT.push({
-          id,
-          nom: ef.nom,
-          dentsRequises: ef.dentsRequises
-        });
+        const newPA = {id, nom: ef.nom, dentsRequises: ef.dentsRequises};
+        PROTH_ACTES_CAT.push(newPA);
+        db.addProthActe && db.addProthActe(newPA).catch(()=>{});
         PROTHESISTES.forEach(p => p.prix[id] = 0);
         toast('Ajouté', 'success');
         setAdd(false);
@@ -6953,12 +6957,9 @@ function LabosGestion() {
       onClick: () => {
         const prix = {};
         PROTH_ACTES_CAT.forEach(a => prix[a.id] = parseInt(nf.prix[a.id]) || 0);
-        PROTHESISTES.push({
-          id: 'pr' + Date.now(),
-          nom: nf.nom,
-          contact: nf.contact,
-          prix
-        });
+        const newPr = {id: 'pr' + Date.now(), nom: nf.nom, contact: nf.contact, prix};
+        PROTHESISTES.push(newPr);
+        db.addProthesiste && db.addProthesiste(newPr).catch(()=>{});
         toast('Prothésiste ajouté', 'success');
         setAdd(false);
         refresh();
@@ -7518,6 +7519,7 @@ function Depenses() {
         const real = CATEGORIES_DEP.find(c => c.id === editCat.id);
         real.nom = editCat.nom;
         real.couleur = editCat.couleur;
+        db.saveCategorieDep && db.saveCategorieDep(real).catch(()=>{});
         toast('Catégorie modifiée', 'success');
         setEditCat(null);
         r(x => x + 1);
