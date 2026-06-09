@@ -266,16 +266,7 @@ textarea.inp{resize:vertical;min-height:64px;}
 <script>
 /* ═
   // Charger historique depuis Supabase
-  if(rHist && rHist.data){
-    HISTORIQUE = rHist.data.map(h=>({...h, user:h.user_id}));
-  }
-  // Charger dépenses depuis Supabase
-  if(rDep && rDep.data){
-    DEPENSES = rDep.data;
-  }
-  if(rPoint && rPoint.data){
-    POINTAGES = rPoint.data;
-  }═══════ SUPABASE CLIENT ════════ */
+═══════ SUPABASE CLIENT ════════ */
 const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
 const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
@@ -331,6 +322,20 @@ async function loadAllData() {
       if (!DENTS_STATUT[d.patient_id]) DENTS_STATUT[d.patient_id] = {};
       DENTS_STATUT[d.patient_id][d.num] = d.statut;
     });
+  }
+  if (rPerm && rPerm.data && rPerm.data.length) {
+    rPerm.data.forEach(row => {
+      if (PERMS[row.role] !== undefined) PERMS[row.role] = row.perms;
+    });
+  }
+  if (rHist && rHist.data) {
+    HISTORIQUE = rHist.data.map(h => ({...h, user: h.user_id}));
+  }
+  if (rDep && rDep.data) {
+    DEPENSES = rDep.data;
+  }
+  if (rPoint && rPoint.data) {
+    POINTAGES = rPoint.data;
   }
 }
 
