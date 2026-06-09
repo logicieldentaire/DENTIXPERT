@@ -1955,7 +1955,7 @@ function PeriodFilter({
     }
   })));
 }
-const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['clock', 'Pointage', 'pointage', 'pointage'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
+const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['receipt', 'Encaissements', 'encaissements', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['clock', 'Pointage', 'pointage', 'pointage'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
 function canAccess(user, permKey) {
   if (permKey === 'always') return true;
   if (user.role === 'admin') return true;
@@ -2642,6 +2642,159 @@ function WeekMini() {
     })));
   }));
 }
+/* ═══════════════════════════════════════
+   MODAL PAIEMENT - modifier/supprimer
+   ═══════════════════════════════════════ */
+function ModalPaiement({paiement, onClose, onSave, onDelete}) {
+  const [f, setF] = React.useState({...paiement});
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: "Détail encaissement",
+    icon: "cash",
+    onClose: onClose,
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("button", {
+        className: "btn",
+        style: {background:"#FEE2E2",color:"#DC2626",border:"none"},
+        onClick: () => { if(window.confirm("Supprimer cet encaissement ?")) onDelete(f.id); }
+      }, /*#__PURE__*/React.createElement(Icon, {n:"trash",size:15}), " Supprimer"),
+      /*#__PURE__*/React.createElement("button", {className:"btn btn-sec", onClick:onClose}, "Annuler"),
+      /*#__PURE__*/React.createElement("button", {className:"btn btn-pri", onClick:()=>onSave(f)}, "Enregistrer")
+    )
+  },
+    /*#__PURE__*/React.createElement("div", {style:{background:"#f8f8f8",borderRadius:10,padding:"12px 14px",marginBottom:14}},
+      /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,fontSize:15}}, pName(f.patient) === "?" ? "Patient supprimé" : pName(f.patient)),
+      /*#__PURE__*/React.createElement("div", {className:"muted",style:{fontSize:12,marginTop:3}},
+        f.acte ? acteName(f.acte) : f.note,
+        " · par ", USERS.find(u=>u.id===f.par)?.prenom || "?",
+        f.heure ? " · " + f.heure : ""
+      )
+    ),
+    /*#__PURE__*/React.createElement(Field, {label:"Date"},
+      /*#__PURE__*/React.createElement("input", {className:"inp",type:"date",value:f.date,onChange:e=>setF({...f,date:e.target.value})})
+    ),
+    /*#__PURE__*/React.createElement(Field, {label:"Montant (MAD)"},
+      /*#__PURE__*/React.createElement("input", {className:"inp",type:"number",value:f.montant,onChange:e=>setF({...f,montant:parseInt(e.target.value)||0})})
+    ),
+    /*#__PURE__*/React.createElement(Field, {label:"Mode"},
+      /*#__PURE__*/React.createElement("select", {className:"inp",value:f.mode,onChange:e=>setF({...f,mode:e.target.value})},
+        Object.entries(MODE_PAY).map(([k,v]) => /*#__PURE__*/React.createElement("option",{key:k,value:k},v))
+      )
+    ),
+    /*#__PURE__*/React.createElement(Field, {label:"Note"},
+      /*#__PURE__*/React.createElement("input", {className:"inp",value:f.note||"",onChange:e=>setF({...f,note:e.target.value})})
+    )
+  );
+}
+
+/* ═══════════════════════════════════════
+   PAGE ENCAISSEMENTS
+   ═══════════════════════════════════════ */
+function Encaissements() {
+  const {user, toast, refresh} = useApp();
+  const [from, setFrom] = React.useState(TODAY);
+  const [to, setTo] = React.useState(TODAY);
+  const [preset, setPreset] = React.useState("jour");
+  const [editPay, setEditPay] = React.useState(null);
+  const [, r] = React.useState(0);
+
+  const inRange = d => d >= from && d <= to;
+  const list = PAIEMENTS.filter(p => inRange(p.date)).sort((a,b) => {
+    if(a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.heure||"00:00").localeCompare(a.heure||"00:00");
+  });
+  const total = list.reduce((s,p) => s+p.montant, 0);
+  const byDate = {};
+  list.forEach(p => { (byDate[p.date] = byDate[p.date]||[]).push(p); });
+  const jours = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
+
+  const handleSave = (updated) => {
+    const idx = PAIEMENTS.findIndex(x=>x.id===updated.id);
+    if(idx>-1) PAIEMENTS[idx] = {...PAIEMENTS[idx],...updated};
+    db.updatePaiement && db.updatePaiement(updated);
+    setEditPay(null); r(x=>x+1); refresh();
+    toast("Encaissement modifié","success");
+  };
+  const handleDelete = (id) => {
+    const idx = PAIEMENTS.findIndex(x=>x.id===id);
+    if(idx>-1) PAIEMENTS.splice(idx,1);
+    db.deletePaiement && db.deletePaiement(id);
+    setEditPay(null); r(x=>x+1); refresh();
+    toast("Encaissement supprimé","success");
+  };
+
+  return /*#__PURE__*/React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
+    /*#__PURE__*/React.createElement(PeriodFilter, {from,to,setFrom,setTo,preset,setPreset}),
+    /*#__PURE__*/React.createElement("div", {className:"grid g3"},
+      /*#__PURE__*/React.createElement(KPI, {ic:"cash",iconBg:"rgba(46,168,90,.13)",iconColor:"#2EA85A",val:fmtMAD(total),lbl:"total encaissé"}),
+      /*#__PURE__*/React.createElement(KPI, {ic:"receipt",iconBg:"rgba(232,119,34,.13)",iconColor:"#E87722",val:list.length,lbl:"transactions"}),
+      /*#__PURE__*/React.createElement(KPI, {ic:"users",iconBg:"rgba(59,130,246,.13)",iconColor:"#3B82F6",val:[...new Set(list.map(p=>p.patient))].length,lbl:"patients"})
+    ),
+    jours.length === 0
+      ? /*#__PURE__*/React.createElement("div",{className:"card"},/*#__PURE__*/React.createElement(Empty,{icon:"cash-off",msg:"Aucun encaissement sur cette période"}))
+      : jours.map(d => {
+          const dayList = byDate[d];
+          const dayTotal = dayList.reduce((s,p)=>s+p.montant,0);
+          return /*#__PURE__*/React.createElement("div", {key:d,className:"card",style:{overflow:"hidden"}},
+            /*#__PURE__*/React.createElement("div", {className:"card-pad",style:{display:"flex",alignItems:"center",paddingBottom:8,borderBottom:"1px solid #f0f0f0"}},
+              /*#__PURE__*/React.createElement("div", {className:"sec-title"},
+                /*#__PURE__*/React.createElement(Icon, {n:"calendar",size:16,color:"#176B3A"}), " ", ddmm(d)
+              ),
+              /*#__PURE__*/React.createElement("b", {style:{marginLeft:"auto",color:"#176B3A"}}, fmtMAD(dayTotal))
+            ),
+            /*#__PURE__*/React.createElement("div", {className:"tbl-scroll"},
+              /*#__PURE__*/React.createElement("table", {className:"tbl"},
+                /*#__PURE__*/React.createElement("thead", null,
+                  /*#__PURE__*/React.createElement("tr", null,
+                    /*#__PURE__*/React.createElement("th", null, "Heure"),
+                    /*#__PURE__*/React.createElement("th", null, "Patient"),
+                    /*#__PURE__*/React.createElement("th", null, "Acte"),
+                    /*#__PURE__*/React.createElement("th", null, "Par"),
+                    /*#__PURE__*/React.createElement("th", null, "Mode"),
+                    /*#__PURE__*/React.createElement("th", {className:"num"}, "Montant"),
+                    /*#__PURE__*/React.createElement("th", {style:{width:40}})
+                  )
+                ),
+                /*#__PURE__*/React.createElement("tbody", null,
+                  dayList.map(p => {
+                    const u = USERS.find(x=>x.id===p.par);
+                    return /*#__PURE__*/React.createElement("tr", {
+                      key:p.id,
+                      style:{cursor:"pointer"},
+                      onClick:()=>setEditPay(p)
+                    },
+                      /*#__PURE__*/React.createElement("td", {style:{fontWeight:700,color:"#176B3A",whiteSpace:"nowrap"}},
+                        p.heure ? /*#__PURE__*/React.createElement("span", null, p.heure) : /*#__PURE__*/React.createElement("span",{className:"muted"}, "—")
+                      ),
+                      /*#__PURE__*/React.createElement("td", null, pName(p.patient) === "?" ? /*#__PURE__*/React.createElement("span",{style:{color:"#DC2626",fontStyle:"italic",fontSize:12}},"Supprimé") : pName(p.patient)),
+                      /*#__PURE__*/React.createElement("td", {className:"muted",style:{fontSize:13}}, p.acte ? acteName(p.acte) : p.note),
+                      /*#__PURE__*/React.createElement("td", null,
+                        /*#__PURE__*/React.createElement("div", {style:{display:"flex",alignItems:"center",gap:6}},
+                          /*#__PURE__*/React.createElement(Avatar, {prenom:u?.prenom||"?",nom:u?.nom||"",size:24}),
+                          /*#__PURE__*/React.createElement("span", {style:{fontSize:12}}, u?.role==="assistante"?u?.prenom:"Dr. "+u?.prenom)
+                        )
+                      ),
+                      /*#__PURE__*/React.createElement("td", null, p.montant > 0 ? /*#__PURE__*/React.createElement(Badge,{color:"#666",bg:"#f0f0f0"},MODE_PAY[p.mode]) : /*#__PURE__*/React.createElement("span",{className:"muted"},"—")),
+                      /*#__PURE__*/React.createElement("td", {className:"num",style:{fontWeight:700,color:p.montant>0?"#176B3A":"#999"}},
+                        p.montant > 0 ? fmtMAD(p.montant) : "Visite"
+                      ),
+                      /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(Icon,{n:"pencil",size:14,color:"#ccc"}))
+                    );
+                  })
+                )
+              )
+            )
+          );
+        }),
+    editPay && /*#__PURE__*/React.createElement(ModalPaiement, {
+      paiement: editPay,
+      onClose: () => setEditPay(null),
+      onSave: handleSave,
+      onDelete: handleDelete
+    })
+  );
+}
+
+
 function Dashboard() {
   const {
     user,
@@ -2652,6 +2805,7 @@ function Dashboard() {
   const [from, setFrom] = useState(TODAY);
   const [to, setTo] = useState(TODAY);
   const [preset, setPreset] = useState('jour');
+  const [editPayItem, setEditPayItem] = useState(null);
   const inRange = d => d >= from && d <= to;
   const payRange = PAIEMENTS.filter(p => inRange(p.date));
   const caRange = payRange.reduce((s, p) => s + p.montant, 0);
@@ -2698,12 +2852,21 @@ function Dashboard() {
         /*#__PURE__*/React.createElement("button", {className:"link-btn",onClick:()=>setPage('finances')}, "Voir tout →")
       ),
       payRange.length === 0 ? /*#__PURE__*/React.createElement(Empty, {icon:"cash-off",msg:"Aucun encaissement"}) :
-      payRange.slice(0,10).map(e => /*#__PURE__*/React.createElement("div", {key:e.id,style:{display:"flex",alignItems:"center",gap:10,padding:"9px 4px",borderBottom:"1px solid #f4f4f4"}},
+      payRange.slice(0,10).map(e => /*#__PURE__*/React.createElement("div", {
+        key:e.id,
+        style:{display:"flex",alignItems:"center",gap:10,padding:"10px 8px",borderBottom:"1px solid #f4f4f4",cursor:"pointer",borderRadius:8},
+        onClick:()=>setEditPayItem(e),
+        onMouseEnter:ev=>ev.currentTarget.style.background='#f8f8f8',
+        onMouseLeave:ev=>ev.currentTarget.style.background='transparent'
+      },
         /*#__PURE__*/React.createElement("div", {style:{flex:1}},
           /*#__PURE__*/React.createElement("div", {style:{fontWeight:500,fontSize:13}}, pName(e.patient) === "?" ? /*#__PURE__*/React.createElement("span",{style:{color:"#DC2626",fontStyle:"italic",fontSize:12}},"Patient supprimé") : pName(e.patient)),
           /*#__PURE__*/React.createElement("div", {className:"muted",style:{fontSize:11.5}}, e.acte ? acteName(e.acte) : e.note)
         ),
-        /*#__PURE__*/React.createElement("span", {style:{fontWeight:700,color:"#E87722",fontSize:13}}, fmtMAD(e.montant))
+        /*#__PURE__*/React.createElement("div", {style:{textAlign:"right",flexShrink:0}},
+          /*#__PURE__*/React.createElement("div", {style:{fontWeight:700,color:"#E87722",fontSize:13}}, fmtMAD(e.montant)),
+          /*#__PURE__*/React.createElement("div", {className:"muted",style:{fontSize:11}}, e.heure || ddmm(e.date))
+        )
       ))
     ),
     /*#__PURE__*/React.createElement("div", {className:"card card-pad"},
@@ -2978,7 +3141,24 @@ function Dashboard() {
         };
       });
     })()
-  }))));
+  }))),
+  editPayItem && /*#__PURE__*/React.createElement(ModalPaiement, {
+    paiement: editPayItem,
+    onClose: () => setEditPayItem(null),
+    onSave: (updated) => {
+      const i = PAIEMENTS.findIndex(x=>x.id===updated.id);
+      if(i>-1) PAIEMENTS[i]={...PAIEMENTS[i],...updated};
+      db.updatePaiement && db.updatePaiement(updated);
+      setEditPayItem(null); refresh(); toast('Modifié','success');
+    },
+    onDelete: (id) => {
+      const i = PAIEMENTS.findIndex(x=>x.id===id);
+      if(i>-1) PAIEMENTS.splice(i,1);
+      db.deletePaiement && db.deletePaiement(id);
+      setEditPayItem(null); refresh(); toast('Supprimé','success');
+    }
+  })
+  );
 }
 
 /* ════════ SCHÉMA DENTAIRE SVG ILLUSTRÉ ════════ */
@@ -5759,10 +5939,105 @@ function RdvPatientPicker({defaultPatient}) {
   );
 }
 
+function RdvModalForm({rdv, onClose, onSave}) {
+  const [patient, setPatient] = React.useState(rdv?.patient || '');
+  const [date, setDate] = React.useState(rdv?.date || TODAY);
+  const [heure, setHeure] = React.useState(rdv?.heure || '09:00');
+  const [motif, setMotif] = React.useState(rdv?.motif || 'Consultation');
+  const [statut, setStatut] = React.useState(rdv?.statut || 'confirme');
+  const [q, setQ] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const selP = PATIENTS.find(p=>p.id===patient);
+  const filtered = PATIENTS.filter(p=>(p.prenom+' '+p.nom).toLowerCase().includes(q.toLowerCase())).slice(0,8);
+
+  return /*#__PURE__*/React.createElement(Modal, {
+    title: rdv?.id ? 'Modifier le RDV' : 'Nouveau RDV',
+    icon: "calendar-plus",
+    onClose: onClose,
+    footer: /*#__PURE__*/React.createElement(React.Fragment, null,
+      /*#__PURE__*/React.createElement("button",{className:"btn btn-sec",onClick:onClose},"Annuler"),
+      /*#__PURE__*/React.createElement("button",{
+        className:"btn btn-pri",
+        disabled: !patient,
+        onClick:()=>onSave({
+          id: rdv?.id || 'r'+Date.now(),
+          patient, date, heure, duree:30, motif, statut,
+          praticien: rdv?.praticien || 'u1'
+        })
+      },"Enregistrer")
+    )
+  },
+    /*#__PURE__*/React.createElement(Field, {label:"Patient", req:true},
+      selP
+        ? /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:"#F0FDF4",borderRadius:9}},
+            /*#__PURE__*/React.createElement(Avatar,{prenom:selP.prenom,nom:selP.nom,size:28}),
+            /*#__PURE__*/React.createElement("span",{style:{fontWeight:600,fontSize:13,flex:1}},selP.prenom+" "+selP.nom),
+            /*#__PURE__*/React.createElement("button",{onClick:()=>{setPatient('');setQ('');},style:{background:"none",border:"none",cursor:"pointer",color:"#DC2626"}},
+              /*#__PURE__*/React.createElement(Icon,{n:"x",size:16})
+            )
+          )
+        : /*#__PURE__*/React.createElement("div",{
+            style:{position:"relative"},
+            onBlur:()=>setTimeout(()=>setOpen(false),150)
+          },
+            /*#__PURE__*/React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,border:"1.5px solid #e0e0e0",borderRadius:9,padding:"8px 12px"}},
+              /*#__PURE__*/React.createElement(Icon,{n:"search",size:16,color:"#999"}),
+              /*#__PURE__*/React.createElement("input",{
+                placeholder:"Rechercher le patient...",value:q,
+                onChange:e=>{setQ(e.target.value);setOpen(true);},
+                onFocus:()=>setOpen(true),
+                style:{border:"none",background:"none",outline:"none",fontSize:13,flex:1}
+              })
+            ),
+            open && filtered.length > 0 && /*#__PURE__*/React.createElement("div",{
+              style:{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1px solid #e0e0e0",borderRadius:10,boxShadow:"0 4px 16px rgba(0,0,0,.1)",zIndex:100,maxHeight:200,overflowY:"auto",marginTop:4}
+            },
+              filtered.map(p=>/*#__PURE__*/React.createElement("div",{
+                key:p.id,
+                onMouseDown:()=>{setPatient(p.id);setQ('');setOpen(false);},
+                style:{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",cursor:"pointer",borderBottom:"1px solid #f5f5f5"}
+              },
+                /*#__PURE__*/React.createElement(Avatar,{prenom:p.prenom,nom:p.nom,size:28}),
+                /*#__PURE__*/React.createElement("div",null,
+                  /*#__PURE__*/React.createElement("div",{style:{fontWeight:600,fontSize:13}},p.prenom+" "+p.nom),
+                  /*#__PURE__*/React.createElement("div",{className:"muted",style:{fontSize:11}},p.tel)
+                )
+              ))
+            )
+          )
+    ),
+    /*#__PURE__*/React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 16px"}},
+      /*#__PURE__*/React.createElement(Field,{label:"Date"},
+        /*#__PURE__*/React.createElement("input",{className:"inp",type:"date",value:date,onChange:e=>setDate(e.target.value)})
+      ),
+      /*#__PURE__*/React.createElement(Field,{label:"Heure"},
+        /*#__PURE__*/React.createElement("input",{className:"inp",type:"time",value:heure,onChange:e=>setHeure(e.target.value)})
+      )
+    ),
+    /*#__PURE__*/React.createElement(Field,{label:"Motif"},
+      /*#__PURE__*/React.createElement("select",{className:"inp",value:motif,onChange:e=>setMotif(e.target.value)},
+        ["Consultation","Détartrage","Extraction","Couronne","Prothèse","Contrôle","Urgence"].map(m=>
+          /*#__PURE__*/React.createElement("option",{key:m},m)
+        )
+      )
+    ),
+    /*#__PURE__*/React.createElement(Field,{label:"Statut"},
+      /*#__PURE__*/React.createElement("select",{className:"inp",value:statut,onChange:e=>setStatut(e.target.value)},
+        /*#__PURE__*/React.createElement("option",{value:"en_attente"},"En attente"),
+        /*#__PURE__*/React.createElement("option",{value:"confirme"},"Confirmé"),
+        /*#__PURE__*/React.createElement("option",{value:"urgence"},"Urgence")
+      )
+    )
+  );
+}
+
+
 function Agenda() {
   const {
     user,
-    toast
+    toast,
+    logAction,
+    refresh
   } = useApp();
   const [view, setView] = useState('jour');
   const [modal, setModal] = useState(false);
@@ -5912,49 +6187,18 @@ function Agenda() {
         color: '#999'
       }
     }, "+", evts.length - 3));
-  }))), modal && /*#__PURE__*/React.createElement(Modal, {
-    title: modal.id ? 'Modifier le RDV' : 'Nouveau RDV',
-    icon: "calendar-plus",
+  }))), modal && /*#__PURE__*/React.createElement(RdvModalForm, {
+    rdv: modal,
     onClose: () => setModal(false),
-    footer: /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-sec",
-      onClick: () => setModal(false)
-    }, "Annuler"), /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-pri",
-      onClick: () => {
-        setModal(false);
-        toast('RDV enregistré', 'success');
-      }
-    }, "Enregistrer"))
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Patient",
-    req: true
-  }, /*#__PURE__*/React.createElement(RdvPatientPicker, {
-    defaultPatient: modal.patient
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '0 16px'
+    onSave: (rdv) => {
+      RDV.push(rdv);
+      db.addRdv && db.addRdv(rdv).catch(()=>{});
+      logAction('Nouveau RDV','create',pName(rdv.patient)+' — '+rdv.motif,'rdv');
+      toast('RDV enregistré','success');
+      setModal(false);
+      refresh();
     }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Date"
-  }, /*#__PURE__*/React.createElement("input", {
-    className: "inp",
-    type: "date",
-    defaultValue: modal.date || TODAY
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "Heure"
-  }, /*#__PURE__*/React.createElement("input", {
-    className: "inp",
-    type: "time",
-    defaultValue: modal.heure || '09:00'
-  }))), /*#__PURE__*/React.createElement(Field, {
-    label: "Motif"
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    defaultValue: modal.motif
-  }, /*#__PURE__*/React.createElement("option", null, "Consultation"), /*#__PURE__*/React.createElement("option", null, "D\xE9tartrage"), /*#__PURE__*/React.createElement("option", null, "Extraction"), /*#__PURE__*/React.createElement("option", null, "Couronne"), /*#__PURE__*/React.createElement("option", null, "Proth\xE8se"), /*#__PURE__*/React.createElement("option", null, "Contr\xF4le"), /*#__PURE__*/React.createElement("option", null, "Urgence")))));
+  }));
 }
 function Prothese() {
   const {
@@ -9176,6 +9420,7 @@ function App() {
     prothese: 'prothese',
     mutuelle: 'mutuelle',
     finances: 'finances',
+    encaissements: 'finances',
     depenses: 'depenses',
     pointage: 'pointage',
     stats: 'stats',
@@ -9236,6 +9481,9 @@ function App() {
       break;
     case 'depenses':
       view = /*#__PURE__*/React.createElement(Depenses, null);
+      break;
+    case 'encaissements':
+      view = /*#__PURE__*/React.createElement(Encaissements, null);
       break;
     case 'pointage':
       view = /*#__PURE__*/React.createElement(Pointage, null);
