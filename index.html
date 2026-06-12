@@ -6361,8 +6361,8 @@ function Prothese() {
   }, "Co\xFBt labo"), (isAdmin || isDentiste) && /*#__PURE__*/React.createElement("th", {
     className: "num"
   }, "Marge"), /*#__PURE__*/React.createElement("th", null, "Labo pay\xE9"))), /*#__PURE__*/React.createElement("tbody", null, PROTH_TRAVAUX.map(t => {
-    const s = PROTH_STATUT[t.statut];
-    const marge = t.prixPatient - t.coutLabo;
+    const s = PROTH_STATUT[t.statut] || {label: t.statut||'—', color:'#9CA3AF'};
+    const marge = (t.prixPatient||0) - (t.coutLabo||0);
     return /*#__PURE__*/React.createElement("tr", {
       key: t.id
     }, /*#__PURE__*/React.createElement("td", {
@@ -6480,9 +6480,9 @@ function ProthModal({
     logAction,
     refresh
   } = useApp();
-  const [patient, setPatient] = useState('p1');
-  const [acte, setActe] = useState(PROTH_ACTES_CAT[0].id);
-  const [proth, setProth] = useState('pr1');
+  const [patient, setPatient] = useState(PATIENTS[0]?.id || '');
+  const [acte, setActe] = useState(PROTH_ACTES_CAT[0]?.id || '');
+  const [proth, setProth] = useState(PROTHESISTES[0]?.id || '');
   const [prixPatient, setPrixPatient] = useState('');
   const [dents, setDents] = useState('');
   const [teeth, setTeeth] = useState(false);
