@@ -315,7 +315,7 @@ async function loadAllData() {
     coutLabo: t.cout_labo
   }));
   if (rR.data) RDV = rR.data;
-  if (rM.data) MUT_DECLAREES = rM.data;
+  if (rM.data) MUT_DECLAREES = rM.data.map(m => ({...m, patientNom: m.patient_nom || ''}));
   if (rD.data) {
     DENTS_STATUT = {};
     rD.data.forEach(d => {
@@ -453,7 +453,8 @@ const db = {
   async addMutuelle(m) {
     try { await SUPA.from('dx_mutuelles').insert({
       id: String(m.id),
-      patient: String(m.patient),
+      patient: m.patient ? String(m.patient) : null,
+      patient_nom: m.patientNom || '',
       mutuelle: String(m.mutuelle),
       montant: parseInt(m.montant) || 0,
       date: String(m.date),
@@ -6191,9 +6192,7 @@ function ProthEditModal({proth, onClose, onSave}) {
     )
   },
     /*#__PURE__*/React.createElement(Field, {label:"Patient"},
-      /*#__PURE__*/React.createElement("select", {className:"inp", value:patient, onChange:e=>setPatient(e.target.value)},
-        PATIENTS.map(p => /*#__PURE__*/React.createElement("option", {key:p.id, value:p.id}, p.prenom+" "+p.nom))
-      )
+      /*#__PURE__*/React.createElement(ProthPatientPicker, {value:patient, onChange:setPatient})
     ),
     /*#__PURE__*/React.createElement(Field, {label:"Type de prothèse"},
       /*#__PURE__*/React.createElement("select", {className:"inp", value:acte, onChange:e=>setActe(e.target.value)},
@@ -6454,6 +6453,58 @@ function Prothese() {
     }
   }))))));
 }
+function ProthPatientPicker({value, onChange}) {
+  const [q, setQ] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const selP = PATIENTS.find(p => p.id === value);
+  const filtered = PATIENTS.filter(p => (p.prenom+' '+p.nom+(p.tel||'')).toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+
+  return /*#__PURE__*/React.createElement("div", null,
+    selP && /*#__PURE__*/React.createElement("div", {
+      style:{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',background:'#F0FDF4',borderRadius:9,marginBottom:8}
+    },
+      /*#__PURE__*/React.createElement(Avatar, {prenom:selP.prenom, nom:selP.nom, size:28}),
+      /*#__PURE__*/React.createElement("span", {style:{fontWeight:600,fontSize:13,flex:1}}, selP.prenom+' '+selP.nom),
+      /*#__PURE__*/React.createElement("button", {
+        onClick:()=>{onChange('');setQ('');},
+        style:{background:'none',border:'none',cursor:'pointer',color:'#DC2626'}
+      }, /*#__PURE__*/React.createElement(Icon, {n:"x",size:16}))
+    ),
+    !selP && /*#__PURE__*/React.createElement("div", {
+      style:{position:'relative'},
+      onBlur:()=>setTimeout(()=>setOpen(false),150)
+    },
+      /*#__PURE__*/React.createElement("div", {
+        style:{display:'flex',alignItems:'center',gap:8,border:'1.5px solid #e0e0e0',borderRadius:9,padding:'8px 12px',background:'#fafafa'}
+      },
+        /*#__PURE__*/React.createElement(Icon, {n:"search",size:16,color:"#999"}),
+        /*#__PURE__*/React.createElement("input", {
+          placeholder:"Rechercher le patient...",
+          value:q,
+          onChange:e=>{setQ(e.target.value);setOpen(true);},
+          onFocus:()=>setOpen(true),
+          style:{border:'none',background:'none',outline:'none',fontSize:13,flex:1}
+        })
+      ),
+      open && filtered.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style:{position:'absolute',top:'100%',left:0,right:0,background:'#fff',border:'1px solid #e0e0e0',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,.1)',zIndex:100,maxHeight:220,overflowY:'auto',marginTop:4}
+      },
+        filtered.map(p => /*#__PURE__*/React.createElement("div", {
+          key:p.id,
+          onMouseDown:()=>{onChange(p.id);setQ('');setOpen(false);},
+          style:{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid #f5f5f5'}
+        },
+          /*#__PURE__*/React.createElement(Avatar, {prenom:p.prenom,nom:p.nom,size:30}),
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", {style:{fontWeight:600,fontSize:13}}, p.prenom+' '+p.nom),
+            /*#__PURE__*/React.createElement("div", {className:"muted",style:{fontSize:11}}, p.tel)
+          )
+        ))
+      )
+    )
+  );
+}
+
 function ProthModal({
   onClose
 }) {
@@ -6504,14 +6555,10 @@ function ProthModal({
   }, /*#__PURE__*/React.createElement(Field, {
     label: "Patient",
     req: true
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
+  }, /*#__PURE__*/React.createElement(ProthPatientPicker, {
     value: patient,
-    onChange: e => setPatient(e.target.value)
-  }, PATIENTS.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.id,
-    value: p.id
-  }, p.prenom, " ", p.nom)))), /*#__PURE__*/React.createElement(Field, {
+    onChange: setPatient
+  })), /*#__PURE__*/React.createElement(Field, {
     label: "Type de prothèse",
     req: true
   }, /*#__PURE__*/React.createElement("select", {
@@ -8223,10 +8270,8 @@ function MutuellesPage() {
   }))), /*#__PURE__*/React.createElement("tbody", null, list.map(m => /*#__PURE__*/React.createElement("tr", {
     key: m.id
   }, /*#__PURE__*/React.createElement("td", null, ddmm(m.date)), /*#__PURE__*/React.createElement("td", {
-    style: {
-      fontWeight: 500
-    }
-  }, pName(m.patient)), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(Badge, {
+    style: {fontWeight: 500}
+  }, m.patientNom ? m.patientNom + " " : pName(m.patient), m.patientNom && /*#__PURE__*/React.createElement("span",{className:"muted",style:{fontSize:11,fontWeight:400}}, "(non inscrit)")), /*#__PURE__*/React.createElement("td", null, /*#__PURE__*/React.createElement(Badge, {
     color: "#3B82F6"
   }, m.mutuelle)), /*#__PURE__*/React.createElement("td", {
     className: "num",
@@ -8350,19 +8395,23 @@ function MutFormulaireRapide({
   logAction,
   refresh
 }) {
-  const {
-    user
-  } = useApp();
+  const {user} = useApp();
+  const [mode, setMode] = useState('existant'); // 'existant' ou 'libre'
   const [patient, setPatient] = useState('');
+  const [nomLibre, setNomLibre] = useState('');
   const [mut, setMut] = useState('CNSS');
   const [montant, setMontant] = useState('');
   const [date, setDate] = useState(TODAY);
   const [ok, setOk] = useState(false);
+
+  const isValid = mode === 'existant' ? !!patient : !!nomLibre.trim();
+
   const save = () => {
-    if (!patient || !montant) return;
+    if (!isValid || !montant) return;
     const nm = {
       id: 'md' + Date.now(),
-      patient,
+      patient: mode === 'existant' ? patient : '',
+      patientNom: mode === 'libre' ? nomLibre.trim() : '',
       mutuelle: mut,
       montant: parseInt(montant) || 0,
       date,
@@ -8370,75 +8419,64 @@ function MutFormulaireRapide({
     };
     MUT_DECLAREES.unshift(nm);
     db.addMutuelle(nm).catch(() => {});
-    logAction('Mutuelle déclarée', 'create', mut + ' — ' + pName(patient) + ' ' + fmtMAD(parseInt(montant) || 0), 'mutuelle');
+    const label = mode === 'existant' ? pName(patient) : nomLibre.trim() + ' (non inscrit)';
+    logAction('Mutuelle déclarée', 'create', mut + ' — ' + label + ' ' + fmtMAD(parseInt(montant) || 0), 'mutuelle');
     setPatient('');
+    setNomLibre('');
     setMontant('');
     setOk(true);
     setTimeout(() => setOk(false), 2000);
     refresh();
     onSave();
   };
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'grid',
-      gridTemplateColumns: '1fr 1fr 1fr 1fr auto',
-      gap: 10,
-      alignItems: 'flex-end',
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement(Field, {
-    label: "Date"
-  }, /*#__PURE__*/React.createElement("input", {
-    className: "inp",
-    type: "date",
-    value: date,
-    onChange: e => setDate(e.target.value)
-  })), /*#__PURE__*/React.createElement(Field, {
-    label: "Patient",
-    req: true
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    value: patient,
-    onChange: e => setPatient(e.target.value)
-  }, /*#__PURE__*/React.createElement("option", {
-    value: ""
-  }, "\u2014 Choisir \u2014"), PATIENTS.map(p => /*#__PURE__*/React.createElement("option", {
-    key: p.id,
-    value: p.id
-  }, p.prenom, " ", p.nom)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Mutuelle"
-  }, /*#__PURE__*/React.createElement("select", {
-    className: "inp",
-    value: mut,
-    onChange: e => setMut(e.target.value)
-  }, MUTUELLES.filter(m => m !== 'Aucune').map(m => /*#__PURE__*/React.createElement("option", {
-    key: m
-  }, m)))), /*#__PURE__*/React.createElement(Field, {
-    label: "Montant (MAD)",
-    req: true
-  }, /*#__PURE__*/React.createElement("input", {
-    className: "inp",
-    type: "number",
-    value: montant,
-    onChange: e => setMontant(e.target.value),
-    placeholder: "Ex: 1200"
-  })), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-pri",
-    onClick: save,
-    disabled: !patient || !montant,
-    style: {
-      height: 40,
-      alignSelf: 'flex-end'
-    }
-  }, ok ? /*#__PURE__*/React.createElement(Icon, {
-    n: "circle-check-filled",
-    size: 18,
-    color: "#fff"
-  }) : /*#__PURE__*/React.createElement(Icon, {
-    n: "plus",
-    size: 18,
-    color: "#fff"
-  })));
+
+  return /*#__PURE__*/React.createElement("div", {style:{display:'flex',flexDirection:'column',gap:10}},
+    /*#__PURE__*/React.createElement("div", {className:"pills"},
+      /*#__PURE__*/React.createElement("button", {
+        className:'pill'+(mode==='existant'?' on':''),
+        onClick:()=>{setMode('existant');setNomLibre('');}
+      }, "Patient enregistré"),
+      /*#__PURE__*/React.createElement("button", {
+        className:'pill'+(mode==='libre'?' on':''),
+        onClick:()=>{setMode('libre');setPatient('');}
+      }, "Nom libre (non inscrit)")
+    ),
+    /*#__PURE__*/React.createElement("div", {
+      style: {display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr auto',gap:10,alignItems:'flex-end',flexWrap:'wrap'}
+    },
+      /*#__PURE__*/React.createElement(Field, {label:"Date"},
+        /*#__PURE__*/React.createElement("input", {className:"inp",type:"date",value:date,onChange:e=>setDate(e.target.value)})
+      ),
+      mode === 'existant'
+        ? /*#__PURE__*/React.createElement(Field, {label:"Patient",req:true},
+            /*#__PURE__*/React.createElement("select", {className:"inp",value:patient,onChange:e=>setPatient(e.target.value)},
+              /*#__PURE__*/React.createElement("option",{value:""},"— Choisir —"),
+              PATIENTS.map(p => /*#__PURE__*/React.createElement("option",{key:p.id,value:p.id}, p.prenom+" "+p.nom))
+            )
+          )
+        : /*#__PURE__*/React.createElement(Field, {label:"Nom du patient",req:true},
+            /*#__PURE__*/React.createElement("input", {
+              className:"inp", value:nomLibre, onChange:e=>setNomLibre(e.target.value),
+              placeholder:"Prénom et nom"
+            })
+          ),
+      /*#__PURE__*/React.createElement(Field, {label:"Mutuelle"},
+        /*#__PURE__*/React.createElement("select", {className:"inp",value:mut,onChange:e=>setMut(e.target.value)},
+          MUTUELLES.filter(m => m !== 'Aucune').map(m => /*#__PURE__*/React.createElement("option",{key:m}, m))
+        )
+      ),
+      /*#__PURE__*/React.createElement(Field, {label:"Montant (MAD)",req:true},
+        /*#__PURE__*/React.createElement("input", {className:"inp",type:"number",value:montant,onChange:e=>setMontant(e.target.value),placeholder:"Ex: 1200"})
+      ),
+      /*#__PURE__*/React.createElement("button", {
+        className:"btn btn-pri", onClick:save, disabled: !isValid || !montant,
+        style:{height:40,alignSelf:'flex-end'}
+      }, ok
+        ? /*#__PURE__*/React.createElement(Icon,{n:"circle-check-filled",size:18,color:"#fff"})
+        : /*#__PURE__*/React.createElement(Icon,{n:"plus",size:18,color:"#fff"})
+      )
+    )
+  );
 }
 
 /* ════════ STATS ════════ */
