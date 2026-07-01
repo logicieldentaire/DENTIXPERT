@@ -6181,11 +6181,11 @@ function Agenda() {
           db.addRdv && SUPA.from('dx_rdv').update({patient:rdv.patient,date:rdv.date,heure:rdv.heure,motif:rdv.motif,statut:rdv.statut,praticien:rdv.praticien}).eq('id',rdv.id).then(()=>{});
         } else {
           RDV.push(rdv);
-          db.addRdv && db.addRdv(rdv).catch(()=>{});
+          db.addRdv && db.addRdv(rdv).then(()=>refresh()).catch(e=>{console.error('addRdv',e?.message);refresh();});
         }
         logAction('RDV','create',pName(rdv.patient)+' — '+rdv.motif+' le '+ddmm(rdv.date),'rdv');
         toast('RDV enregistré','success');
-        setModal(false); refresh();
+        setModal(false);
       }
     })
   );
@@ -8029,9 +8029,8 @@ function Permissions() {
   const [, r] = useState(0);
   const toggle = (role, key) => {
     PERMS[role][key] = !PERMS[role][key];
-    try {
-      localStorage.setItem('dx_perms', JSON.stringify(PERMS));
-    } catch (e) {}
+    try { localStorage.setItem('dx_perms', JSON.stringify(PERMS)); } catch(e) {}
+    SUPA.from('dx_permissions').upsert({role, perms: {...PERMS[role]}}).then(()=>{}).catch(()=>{});
     r(x => x + 1);
     toast('Permission mise à jour ✓', 'success');
   };
