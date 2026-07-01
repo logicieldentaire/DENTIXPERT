@@ -875,6 +875,19 @@ let USERS = [{
   actif: true,
   derniere: '24/05/2026 07:55'
 }];
+// Charger les overrides de noms utilisateurs SYNCHRONE
+try {
+  var _usersOverride = localStorage.getItem('dx_users_override');
+  if (_usersOverride) {
+    var _ov = JSON.parse(_usersOverride);
+    Object.keys(_ov).forEach(function(id) {
+      var u = USERS.find(function(x){return x.id===id;});
+      if(u) Object.assign(u, _ov[id]);
+    });
+  }
+} catch(_e) {}
+
+
 let PERMS = {
   dentiste_remplacant: {
     patients: true,
@@ -903,6 +916,18 @@ let PERMS = {
     pointage: false
   }
 };
+// Charger les permissions depuis localStorage SYNCHRONE (avant React)
+try {
+  var _savedPerms = localStorage.getItem('dx_perms');
+  if (_savedPerms) {
+    var _p = JSON.parse(_savedPerms);
+    Object.keys(_p).forEach(function(role) {
+      if (PERMS[role]) Object.assign(PERMS[role], _p[role]);
+    });
+  }
+} catch(_e) {}
+
+
 const PERM_LABELS = {
   patients: 'Patients',
   actes: 'Gérer actes',
@@ -9422,19 +9447,7 @@ function App() {
   const [, setTick] = useState(0);
   const refresh = () => setTick(t => t + 1);
   useEffect(() => {
-    // Charger permissions depuis localStorage
-    try {
-      const saved = localStorage.getItem('dx_perms');
-      if (saved) {
-        const p = JSON.parse(saved);
-        Object.keys(p).forEach(role => {
-          if (PERMS[role]) PERMS[role] = {
-            ...PERMS[role],
-            ...p[role]
-          };
-        });
-      }
-    } catch (e) {}
+    // Permissions déjà chargées synchronement avant React
     loadAllData().then(() => {
       setAppLoading(false);
       initRealtime(() => setTick(t => t + 1));
