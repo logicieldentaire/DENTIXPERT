@@ -527,17 +527,13 @@ const db = {
     }); } catch(e) { console.error('db.addUser', e?.message||'err'); }
   },
   async updateUser(u) {
-    try {
-      await SUPA.from('dx_users').update({
-        nom: String(u.nom || ''),
-        prenom: String(u.prenom || ''),
-        email: String(u.email || '')
-      }).eq('id', String(u.id));
-      // Essayer aussi mot de passe et rôle séparément
-      if(u.motdepasse) {
-        await SUPA.from('dx_users').update({motdepasse: String(u.motdepasse)}).eq('id', String(u.id));
-      }
-    } catch(e) { console.error('db.updateUser', e?.message||'err'); }
+    const {data, error} = await SUPA.from('dx_users').update({
+      nom: String(u.nom||''), prenom: String(u.prenom||''),
+      email: String(u.email||''), role: String(u.role||''),
+      couleur: String(u.couleur||'#176B3A'), actif: u.actif !== false
+    }).eq('id', String(u.id)).select();
+    if(error) { alert('Erreur sauvegarde: ' + error.message); }
+    return {data, error};
   },
   async deleteUser(id) {
     try { await SUPA.from('dx_users').delete().eq('id', id); } catch(e) { console.error('db.deleteUser', e?.message||'err'); }
@@ -8031,7 +8027,9 @@ function Permissions() {
   const toggle = (role, key) => {
     PERMS[role][key] = !PERMS[role][key];
     try { localStorage.setItem('dx_perms', JSON.stringify(PERMS)); } catch(e) {}
-    SUPA.from('dx_permissions').upsert({role, perms: {...PERMS[role]}}).then(()=>{}).catch(()=>{});
+    SUPA.from('dx_permissions').upsert({role, perms: {...PERMS[role]}}).then(({error})=>{
+      if(error) alert('Erreur permission: '+error.message);
+    });
     r(x => x + 1);
     toast('Permission mise à jour ✓', 'success');
   };
