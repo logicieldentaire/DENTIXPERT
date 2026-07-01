@@ -5980,7 +5980,7 @@ function RdvModalForm({rdv, onClose, onSave}) {
     ),
     /*#__PURE__*/React.createElement(Field,{label:"Motif"},
       /*#__PURE__*/React.createElement("select",{className:"inp",value:motif,onChange:e=>setMotif(e.target.value)},
-        ["Consultation","Détartrage","Extraction","Couronne","Prothèse","Contrôle","Urgence"].map(m=>
+        [...new Set(["Consultation","Contrôle","Urgence",...ACTES_NOM.map(a=>a.nom)])].map(m=>
           /*#__PURE__*/React.createElement("option",{key:m},m)
         )
       )
@@ -6004,172 +6004,191 @@ function RdvModalForm({rdv, onClose, onSave}) {
 
 
 function Agenda() {
-  const {
-    user,
-    toast,
-    logAction,
-    refresh
-  } = useApp();
+  const {user, toast, logAction, refresh} = useApp();
   const [view, setView] = useState('jour');
   const [modal, setModal] = useState(false);
-  const mine = r => true; // Tous les utilisateurs voient tous les RDV
+  const [selDate, setSelDate] = useState(TODAY);
+  const mine = r => true;
   const hours = [];
   for (let h = 8; h <= 19; h++) hours.push(h);
-  const week = weekDates(TODAY);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const firstDow = (monthStart.getDay() + 6) % 7;
-  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).getDate();
-  const cells = [];
-  for (let i = 0; i < firstDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push('2026-05-' + String(d).padStart(2, '0'));
-  return /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 16
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "card card-pad",
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 14,
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "pills"
-  }, [['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois']].map(([v, l]) => /*#__PURE__*/React.createElement("button", {
-    key: v,
-    className: 'pill' + (view === v ? ' on' : ''),
-    onClick: () => setView(v)
-  }, l))), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-pri",
-    style: {
-      marginLeft: 'auto'
-    },
-    onClick: () => setModal(true)
-  }, /*#__PURE__*/React.createElement(Icon, {
-    n: "calendar-plus",
-    size: 16
-  }), " Nouveau RDV")), view === 'jour' && /*#__PURE__*/React.createElement("div", {
-    className: "agenda-grid"
-  }, /*#__PURE__*/React.createElement("div", null, hours.map(h => /*#__PURE__*/React.createElement("div", {
-    key: h,
-    className: "ag-hour"
-  }, h, ":00"))), /*#__PURE__*/React.createElement("div", null, hours.map(h => {
-    const evts = RDV.filter(r => r.date === TODAY && mine(r) && parseInt(r.heure) === h);
-    return /*#__PURE__*/React.createElement("div", {
-      key: h,
-      className: "ag-slot",
-      onClick: () => setModal(true)
-    }, evts.map(r => {
-      const s = STATUT_RDV[r.statut];
-      const p = PATIENTS.find(x => x.id === r.patient);
-      return /*#__PURE__*/React.createElement("div", {
-        key: r.id,
-        className: "ag-evt",
-        style: {
-          background: s.color
-        },
-        onClick: e => {
-          e.stopPropagation();
-          setModal(r);
-        }
-      }, /*#__PURE__*/React.createElement("b", null, r.heure, " \xB7 ", p?.prenom, " ", p?.nom), r.motif);
-    }));
-  }))), view === 'semaine' && /*#__PURE__*/React.createElement("div", {
-    className: "week-grid"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "week-head"
-  }), week.map(d => {
+
+  // Navigation
+  const addDays = (d, n) => {
+    const dt = new Date(d); dt.setDate(dt.getDate() + n);
+    return dt.toISOString().slice(0,10);
+  };
+  const startOfWeek = (d) => {
     const dt = new Date(d);
-    const isT = d === TODAY;
-    return /*#__PURE__*/React.createElement("div", {
-      key: d,
-      className: 'week-head' + (isT ? ' today' : '')
-    }, DOW[(dt.getDay() + 6) % 7], /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 15
-      }
-    }, dt.getDate()));
-  }), hours.map(h => [/*#__PURE__*/React.createElement("div", {
-    key: 'h' + h,
-    className: "week-hour"
-  }, h, ":00"), ...week.map(d => {
-    const evts = RDV.filter(r => r.date === d && mine(r) && parseInt(r.heure) === h);
-    return /*#__PURE__*/React.createElement("div", {
-      key: d + h,
-      className: "week-cell",
-      onClick: () => setModal(true)
-    }, evts.map(r => {
-      const s = STATUT_RDV[r.statut];
-      const p = PATIENTS.find(x => x.id === r.patient);
-      return /*#__PURE__*/React.createElement("div", {
-        key: r.id,
-        className: "week-evt",
-        style: {
-          background: s.color
+    const dow = (dt.getDay() + 6) % 7;
+    dt.setDate(dt.getDate() - dow);
+    return dt.toISOString().slice(0,10);
+  };
+  const weekDatesFrom = (d) => {
+    const s = startOfWeek(d);
+    return Array.from({length:7}, (_,i) => addDays(s, i));
+  };
+  const week = weekDatesFrom(selDate);
+
+  const prevNext = (n) => {
+    if(view === 'jour') setSelDate(d => addDays(d, n));
+    else if(view === 'semaine') setSelDate(d => addDays(startOfWeek(d), n * 7));
+    else setSelDate(d => { const dt = new Date(d); dt.setMonth(dt.getMonth() + n); return dt.toISOString().slice(0,10); });
+  };
+
+  // Label navigation
+  const navLabel = () => {
+    if(view === 'jour') return new Date(selDate + 'T12:00:00').toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+    if(view === 'semaine') return ddmm(week[0]) + ' — ' + ddmm(week[6]);
+    return new Date(selDate + 'T12:00:00').toLocaleDateString('fr-FR', {month:'long', year:'numeric'});
+  };
+
+  // Mois
+  const selMonth = new Date(selDate + 'T12:00:00');
+  const monthStart = new Date(selMonth.getFullYear(), selMonth.getMonth(), 1);
+  const firstDow = (monthStart.getDay() + 6) % 7;
+  const daysInMonth = new Date(selMonth.getFullYear(), selMonth.getMonth() + 1, 0).getDate();
+  const cells = Array.from({length: firstDow + daysInMonth}, (_, i) => i < firstDow ? null : i - firstDow + 1);
+
+  return /*#__PURE__*/React.createElement("div", {style:{display:'flex',flexDirection:'column',gap:14}},
+    /*#__PURE__*/React.createElement("div", {className:"card card-pad",style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}},
+      /*#__PURE__*/React.createElement("div", {className:"pills"},
+        [['jour','Jour'],['semaine','Semaine'],['mois','Mois']].map(([v,l]) =>
+          /*#__PURE__*/React.createElement("button", {key:v, className:'pill'+(view===v?' on':''), onClick:()=>setView(v)}, l)
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", {style:{display:'flex',alignItems:'center',gap:8,margin:'0 auto'}},
+        /*#__PURE__*/React.createElement("button", {
+          className:"icon-btn", onClick:()=>prevNext(-1),
+          style:{background:'#f4f4f4',border:'none',borderRadius:8,padding:'6px 10px',cursor:'pointer',fontSize:16}
+        }, "‹"),
+        /*#__PURE__*/React.createElement("span", {style:{fontWeight:600,fontSize:13,minWidth:180,textAlign:'center',textTransform:'capitalize'}}, navLabel()),
+        /*#__PURE__*/React.createElement("button", {
+          className:"icon-btn", onClick:()=>prevNext(1),
+          style:{background:'#f4f4f4',border:'none',borderRadius:8,padding:'6px 10px',cursor:'pointer',fontSize:16}
+        }, "›"),
+        /*#__PURE__*/React.createElement("button", {
+          className:"btn",
+          style:{fontSize:12,padding:'4px 10px',background:'#f4f4f4',border:'none',borderRadius:8,cursor:'pointer'},
+          onClick:()=>setSelDate(TODAY)
+        }, "Aujourd'hui")
+      ),
+      /*#__PURE__*/React.createElement("button", {
+        className:"btn btn-pri", style:{marginLeft:'auto'},
+        onClick:()=>setModal({date: selDate})
+      }, /*#__PURE__*/React.createElement(Icon,{n:"calendar-plus",size:16,color:"#fff"}), " Nouveau RDV")
+    ),
+
+    view === 'jour' && /*#__PURE__*/React.createElement("div", {className:"card",style:{overflow:'hidden'}},
+      /*#__PURE__*/React.createElement("div", {className:"ag-grid"},
+        /*#__PURE__*/React.createElement("div", {className:"ag-times"},
+          hours.map(h => /*#__PURE__*/React.createElement("div", {key:h, className:"ag-time"}, h+":00"))
+        ),
+        /*#__PURE__*/React.createElement("div", {className:"ag-slots"},
+          hours.map(h => {
+            const evts = RDV.filter(r => r.date === selDate && mine(r) && parseInt(r.heure) === h);
+            return /*#__PURE__*/React.createElement("div", {
+              key:h, className:"ag-slot",
+              onClick:()=>setModal({date: selDate, heure: h+':00'})
+            }, evts.map(r => {
+              const s = STATUT_RDV[r.statut];
+              const p = PATIENTS.find(x=>x.id===r.patient);
+              return /*#__PURE__*/React.createElement("div", {
+                key:r.id, className:"ag-evt",
+                style:{background: s.color},
+                onClick:e=>{e.stopPropagation();setModal(r);}
+              },
+                /*#__PURE__*/React.createElement("b", null, p ? p.prenom+' '+p.nom : r.patient),
+                /*#__PURE__*/React.createElement("div", {className:"muted",style:{fontSize:11}}, r.heure),
+                /*#__PURE__*/React.createElement("div", {style:{flex:1}}, r.motif),
+                /*#__PURE__*/React.createElement(RdvBadge, {statut:r.statut})
+              );
+            }));
+          })
+        )
+      )
+    ),
+
+    view === 'semaine' && /*#__PURE__*/React.createElement("div", {className:"card",style:{overflow:'auto'}},
+      /*#__PURE__*/React.createElement("div", {className:"week-grid"},
+        /*#__PURE__*/React.createElement("div", {className:"week-head"}),
+        week.map(d => /*#__PURE__*/React.createElement("div", {
+          key:d, className:"week-head"+(d===TODAY?' today':''),
+          style:{fontWeight:d===selDate?700:400, cursor:'pointer'},
+          onClick:()=>{setSelDate(d);setView('jour');}
         },
-        onClick: e => {
-          e.stopPropagation();
-          setModal(r);
+          new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'})
+        )),
+        hours.map(h =>
+          /*#__PURE__*/React.createElement(React.Fragment, {key:h},
+            /*#__PURE__*/React.createElement("div", {className:"ag-time",style:{gridColumn:'1',lineHeight:'48px'}}, h+":00"),
+            week.map(d => {
+              const evts = RDV.filter(r => r.date === d && mine(r) && parseInt(r.heure) === h);
+              return /*#__PURE__*/React.createElement("div", {
+                key:d, className:"ag-slot",
+                onClick:()=>setModal({date:d, heure:h+':00'})
+              }, evts.map(r => {
+                const s = STATUT_RDV[r.statut];
+                const p = PATIENTS.find(x=>x.id===r.patient);
+                return /*#__PURE__*/React.createElement("div", {
+                  key:r.id, className:"ag-evt",
+                  style:{background:s.color},
+                  onClick:e=>{e.stopPropagation();setModal(r);}
+                },
+                  /*#__PURE__*/React.createElement("b", {style:{fontSize:11}}, p ? p.prenom+' '+p.nom : '?'),
+                  /*#__PURE__*/React.createElement("div", {style:{fontSize:10}}, r.motif)
+                );
+              }));
+            })
+          )
+        )
+      )
+    ),
+
+    view === 'mois' && /*#__PURE__*/React.createElement("div", {className:"card card-pad"},
+      /*#__PURE__*/React.createElement("div", {className:"month-grid"},
+        ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d =>
+          /*#__PURE__*/React.createElement("div", {key:d, className:"month-head"}, d)
+        ),
+        cells.map((day, i) => {
+          if(!day) return /*#__PURE__*/React.createElement("div", {key:'e'+i});
+          const dStr = selMonth.getFullYear()+'-'+String(selMonth.getMonth()+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+          const evts = RDV.filter(r => r.date === dStr && mine(r));
+          return /*#__PURE__*/React.createElement("div", {
+            key:dStr, className:"month-cell"+(dStr===TODAY?' today':''),
+            onClick:()=>{setSelDate(dStr);setView('jour');}
+          },
+            /*#__PURE__*/React.createElement("div", {className:"month-day"}, day),
+            evts.slice(0,2).map(r => {
+              const s = STATUT_RDV[r.statut];
+              return /*#__PURE__*/React.createElement("div", {
+                key:r.id, className:"month-evt",
+                style:{background:s.color}
+              }, pName(r.patient).split(' ')[0]);
+            }),
+            evts.length > 2 && /*#__PURE__*/React.createElement("div", {className:"month-more"}, "+"+(evts.length-2))
+          );
+        })
+      )
+    ),
+
+    modal && /*#__PURE__*/React.createElement(RdvModalForm, {
+      rdv: modal,
+      onClose: ()=>setModal(false),
+      onSave: (rdv) => {
+        const existing = RDV.findIndex(r => r.id === rdv.id);
+        if(existing > -1) {
+          RDV[existing] = rdv;
+          db.addRdv && SUPA.from('dx_rdv').update({patient:rdv.patient,date:rdv.date,heure:rdv.heure,motif:rdv.motif,statut:rdv.statut,praticien:rdv.praticien}).eq('id',rdv.id).then(()=>{});
+        } else {
+          RDV.push(rdv);
+          db.addRdv && db.addRdv(rdv).catch(()=>{});
         }
-      }, r.heure, " ", p?.prenom);
-    }));
-  })])), view === 'mois' && /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    className: "month-grid",
-    style: {
-      marginBottom: 6
-    }
-  }, DOW.map(d => /*#__PURE__*/React.createElement("div", {
-    key: d,
-    className: "month-dayhead"
-  }, d))), /*#__PURE__*/React.createElement("div", {
-    className: "month-grid"
-  }, cells.map((d, i) => {
-    if (!d) return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      className: "month-cell other"
-    });
-    const evts = RDV.filter(r => r.date === d && mine(r));
-    const isT = d === TODAY;
-    return /*#__PURE__*/React.createElement("div", {
-      key: i,
-      className: 'month-cell' + (isT ? ' today' : ''),
-      onClick: () => setModal(true)
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "month-daynum",
-      style: isT ? {
-        color: '#176B3A'
-      } : {}
-    }, parseInt(d.slice(8))), evts.slice(0, 3).map(r => {
-      const s = STATUT_RDV[r.statut];
-      const p = PATIENTS.find(x => x.id === r.patient);
-      return /*#__PURE__*/React.createElement("div", {
-        key: r.id,
-        className: "month-evt",
-        style: {
-          background: s.color
-        }
-      }, r.heure, " ", p?.prenom);
-    }), evts.length > 3 && /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 9.5,
-        color: '#999'
+        logAction('RDV','create',pName(rdv.patient)+' — '+rdv.motif+' le '+ddmm(rdv.date),'rdv');
+        toast('RDV enregistré','success');
+        setModal(false); refresh();
       }
-    }, "+", evts.length - 3));
-  }))), modal && /*#__PURE__*/React.createElement(RdvModalForm, {
-    rdv: modal,
-    onClose: () => setModal(false),
-    onSave: (rdv) => {
-      RDV.push(rdv);
-      db.addRdv && db.addRdv(rdv).catch(()=>{});
-      logAction('Nouveau RDV','create',pName(rdv.patient)+' — '+rdv.motif,'rdv');
-      toast('RDV enregistré','success');
-      setModal(false);
-      refresh();
-    }
-  }));
+    })
+  );
 }
 function ProthEditModal({proth, onClose, onSave}) {
   const [patient, setPatient] = React.useState(proth.patient || '');
@@ -9157,7 +9176,14 @@ function Settings() {
         if (edit.motdepasse) real.motdepasse = edit.motdepasse;
         real.role = edit.role;
         db.updateUser(real).catch(() => {});
-        toast('Modifié', 'success');
+        // Mettre à jour la session si c'est l'utilisateur courant
+        try {
+          const sessionUser = JSON.parse(sessionStorage.getItem('dx_user')||'null');
+          if(sessionUser && sessionUser.id === real.id) {
+            sessionStorage.setItem('dx_user', JSON.stringify(real));
+          }
+        } catch(e){}
+        toast('Modifié ✓', 'success');
         setEdit(null);
         r(x => x + 1);
       }
