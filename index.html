@@ -273,7 +273,17 @@ const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 async function loadAllData() {
   const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint, rCatDep] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*'), SUPA.from('dx_categories_depenses').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
-  if (rU.data) USERS = rU.data;
+  if (rU.data) {
+    USERS = rU.data;
+    // Appliquer les overrides de noms sauvegardés localement
+    try {
+      const overrides = JSON.parse(localStorage.getItem('dx_users_override')||'{}');
+      Object.keys(overrides).forEach(id => {
+        const u = USERS.find(x=>x.id===id);
+        if(u) Object.assign(u, overrides[id]);
+      });
+    } catch(e){}
+  }
   if (rP.data) PATIENTS = rP.data;
   if (rA.data && rA.data.length > 0) ACTES_NOM = rA.data.map(a => ({...a, dentsRequises: a.dents_requises}));
   if (rPl.data) {
@@ -320,11 +330,7 @@ async function loadAllData() {
       DENTS_STATUT[d.patient_id][d.num] = d.statut;
     });
   }
-  if (rPerm && rPerm.data && rPerm.data.length) {
-    rPerm.data.forEach(row => {
-      if (PERMS[row.role] !== undefined) PERMS[row.role] = row.perms;
-    });
-  }
+  // Permissions: gérées uniquement par localStorage (voir chargement initial)
   if (rHist && rHist.data) {
     HISTORIQUE = rHist.data.map(h => ({...h, user: h.user_id}));
   }
@@ -9173,17 +9179,26 @@ function Settings() {
         real.email = edit.email;
         if (edit.motdepasse) real.motdepasse = edit.motdepasse;
         real.role = edit.role;
-        db.updateUser(real).catch(() => {});
-        // Mettre à jour la session si c'est l'utilisateur courant
-        try {
-          const sessionUser = JSON.parse(sessionStorage.getItem('dx_user')||'null');
-          if(sessionUser && sessionUser.id === real.id) {
-            sessionStorage.setItem('dx_user', JSON.stringify(real));
+        db.updateUser(real).then(({error})=>{
+          if(error) {
+            toast('Erreur: '+error.message, 'error');
+          } else {
+            // Sauvegarder dans localStorage pour persister après reload
+            try {
+              const saved = JSON.parse(localStorage.getItem('dx_users_override')||'{}');
+              saved[real.id] = {nom:real.nom, prenom:real.prenom, email:real.email, role:real.role, couleur:real.couleur};
+              localStorage.setItem('dx_users_override', JSON.stringify(saved));
+              // Mettre à jour session active
+              const sessionUser = JSON.parse(sessionStorage.getItem('dx_user')||'null');
+              if(sessionUser && sessionUser.id === real.id) {
+                sessionStorage.setItem('dx_user', JSON.stringify({...sessionUser, ...real}));
+              }
+            } catch(e){}
+            toast('Modifié ✓', 'success');
+            setEdit(null);
+            r(x => x + 1);
           }
-        } catch(e){}
-        toast('Modifié ✓', 'success');
-        setEdit(null);
-        r(x => x + 1);
+        }).catch(e => toast('Erreur: '+(e?.message||'inconnue'), 'error'));
       }
     }, "Enregistrer"))
   }, /*#__PURE__*/React.createElement("div", {
