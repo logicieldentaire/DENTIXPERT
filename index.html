@@ -275,10 +275,7 @@ async function loadAllData() {
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
   if (rU.data) USERS = rU.data;
   if (rP.data) PATIENTS = rP.data;
-  if (rA.data) ACTES_NOM = rA.data.map(a => ({
-    ...a,
-    dentsRequises: a.dents_requises
-  }));
+  if (rA.data && rA.data.length > 0) ACTES_NOM = rA.data.map(a => ({...a, dentsRequises: a.dents_requises}));
   if (rPl.data) {
     PLANS = rPl.data;
     PLANS.forEach(pl => {
@@ -485,16 +482,19 @@ const db = {
     try { await SUPA.from('dx_proth_travaux').delete().eq('id', id); } catch(e) {}
   },
   async addRdv(r) {
-    try { await SUPA.from('dx_rdv').insert({
-      id: String(r.id),
-      patient: String(r.patient),
-      praticien: String(r.praticien),
-      date: String(r.date),
-      heure: String(r.heure),
-      duree: parseInt(r.duree) || 30,
-      motif: String(r.motif || ''),
-      statut: String(r.statut || 'en_attente')
-    }); } catch(e) { console.error('db.addRdv', e?.message||'err'); }
+    try {
+      const {error} = await SUPA.from('dx_rdv').insert({
+        id: String(r.id),
+        patient: String(r.patient),
+        praticien: r.praticien ? String(r.praticien) : null,
+        date: String(r.date),
+        heure: String(r.heure),
+        duree: parseInt(r.duree) || 30,
+        motif: String(r.motif || ''),
+        statut: String(r.statut || 'en_attente')
+      });
+      if(error) throw error;
+    } catch(e) { console.error('db.addRdv ERREUR:', e?.message||e); throw e; }
   },
   async addActe(a) {
     try { await SUPA.from('dx_actes').insert({
@@ -527,16 +527,17 @@ const db = {
     }); } catch(e) { console.error('db.addUser', e?.message||'err'); }
   },
   async updateUser(u) {
-    try { await SUPA.from('dx_users').update({
-      nom: String(u.nom || ''),
-      prenom: String(u.prenom || ''),
-      email: String(u.email || ''),
-      motdepasse: String(u.motdepasse || ''),
-      role: String(u.role || ''),
-      actif: u.actif !== false,
-      couleur: String(u.couleur || '#176B3A'),
-      needscode: u.needsCode !== false
-    }).eq('id', String(u.id)); } catch(e) { console.error('db.updateUser', e?.message||'err'); }
+    try {
+      await SUPA.from('dx_users').update({
+        nom: String(u.nom || ''),
+        prenom: String(u.prenom || ''),
+        email: String(u.email || '')
+      }).eq('id', String(u.id));
+      // Essayer aussi mot de passe et rôle séparément
+      if(u.motdepasse) {
+        await SUPA.from('dx_users').update({motdepasse: String(u.motdepasse)}).eq('id', String(u.id));
+      }
+    } catch(e) { console.error('db.updateUser', e?.message||'err'); }
   },
   async deleteUser(id) {
     try { await SUPA.from('dx_users').delete().eq('id', id); } catch(e) { console.error('db.deleteUser', e?.message||'err'); }
