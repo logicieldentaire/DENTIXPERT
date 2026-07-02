@@ -330,14 +330,12 @@ async function loadAllData() {
       DENTS_STATUT[d.patient_id][d.num] = d.statut;
     });
   }
-  // Charger permissions depuis Supabase (source de vérité pour multi-utilisateurs)
+  // Charger permissions depuis Supabase - source unique de vérité
   if (rPerm && rPerm.data && rPerm.data.length) {
     rPerm.data.forEach(row => {
       if (PERMS[row.role] !== undefined && row.perms) {
-        // Fusionner avec les clés existantes (évite de perdre des clés nouvelles)
-        Object.keys(PERMS[row.role]).forEach(k => {
-          if (row.perms[k] !== undefined) PERMS[row.role][k] = row.perms[k];
-        });
+        // Remplacer complètement (pas de merge) - Supabase est la vérité
+        PERMS[row.role] = {...PERMS[row.role], ...row.perms};
       }
     });
   }
@@ -8067,12 +8065,23 @@ function Permissions() {
   const [, r] = useState(0);
   const toggle = (role, key) => {
     PERMS[role][key] = !PERMS[role][key];
-    try { localStorage.setItem('dx_perms', JSON.stringify(PERMS)); } catch(e) {}
-    SUPA.from('dx_permissions').upsert({role, perms: JSON.parse(JSON.stringify(PERMS[role]))}).then(({error})=>{
-      if(error) { toast('Erreur: '+error.message, 'error'); }
-    });
+    const newPerms = JSON.parse(JSON.stringify(PERMS[role]));
+    SUPA.from('dx_permissions')
+      .update({perms: newPerms})
+      .eq('role', role)
+      .then(({error, data}) => {
+        if(error) {
+          // Si update échoue, essayer insert
+          SUPA.from('dx_permissions').insert({role, perms: newPerms}).then(({error:e2})=>{
+            if(e2) toast('Erreur sauvegarde: '+e2.message, 'error');
+            else toast('Permission mise à jour ✓', 'success');
+          });
+        } else {
+          try { localStorage.setItem('dx_perms', JSON.stringify(PERMS)); } catch(e) {}
+          toast('Permission mise à jour ✓', 'success');
+        }
+      });
     r(x => x + 1);
-    toast('Permission mise à jour ✓', 'success');
   };
   return /*#__PURE__*/React.createElement("div", {
     className: "card card-pad"
