@@ -6130,11 +6130,11 @@ function Agenda() {
     ),
 
     view === 'jour' && /*#__PURE__*/React.createElement("div", {className:"card",style:{overflow:'hidden'}},
-      /*#__PURE__*/React.createElement("div", {className:"ag-grid"},
-        /*#__PURE__*/React.createElement("div", {className:"ag-times"},
-          hours.map(h => /*#__PURE__*/React.createElement("div", {key:h, className:"ag-time"}, h+":00"))
+      /*#__PURE__*/React.createElement("div", {className:"agenda-grid"},
+        /*#__PURE__*/React.createElement("div", {className:""},
+          hours.map(h => /*#__PURE__*/React.createElement("div", {key:h, className:"ag-hour"}, h+":00"))
         ),
-        /*#__PURE__*/React.createElement("div", {className:"ag-slots"},
+        /*#__PURE__*/React.createElement("div", {className:""},
           hours.map(h => {
             const evts = RDV.filter(r => r.date === selDate && mine(r) && parseInt(r.heure) === h);
             return /*#__PURE__*/React.createElement("div", {
@@ -6171,7 +6171,7 @@ function Agenda() {
         )),
         hours.map(h =>
           /*#__PURE__*/React.createElement(React.Fragment, {key:h},
-            /*#__PURE__*/React.createElement("div", {className:"ag-time",style:{gridColumn:'1',lineHeight:'48px'}}, h+":00"),
+            /*#__PURE__*/React.createElement("div", {className:"ag-hour",style:{gridColumn:'1',lineHeight:'48px'}}, h+":00"),
             week.map(d => {
               const evts = RDV.filter(r => r.date === d && mine(r) && parseInt(r.heure) === h);
               return /*#__PURE__*/React.createElement("div", {
