@@ -541,12 +541,17 @@ const db = {
     }); } catch(e) { console.error('db.addUser', e?.message||'err'); }
   },
   async updateUser(u) {
-    const {data, error} = await SUPA.from('dx_users').update({
-      nom: String(u.nom||''), prenom: String(u.prenom||''),
-      email: String(u.email||''), role: String(u.role||''),
-      couleur: String(u.couleur||'#176B3A'), actif: u.actif !== false
-    }).eq('id', String(u.id)).select();
-    if(error) { alert('Erreur sauvegarde: ' + error.message); }
+    const fields = {
+      nom: String(u.nom||''),
+      prenom: String(u.prenom||''),
+      email: String(u.email||''),
+      role: String(u.role||''),
+      couleur: String(u.couleur||'#176B3A'),
+      actif: u.actif !== false
+    };
+    if (u.motdepasse) fields.motdepasse = String(u.motdepasse);
+    const {data, error} = await SUPA.from('dx_users').update(fields).eq('id', String(u.id)).select();
+    if(error) console.error('updateUser error:', error.message);
     return {data, error};
   },
   async deleteUser(id) {
@@ -9315,7 +9320,7 @@ function Settings() {
             // Sauvegarder dans localStorage pour persister après reload
             try {
               const saved = JSON.parse(localStorage.getItem('dx_users_override')||'{}');
-              saved[real.id] = {nom:real.nom, prenom:real.prenom, email:real.email, role:real.role, couleur:real.couleur};
+              saved[real.id] = {nom:real.nom, prenom:real.prenom, email:real.email, role:real.role, couleur:real.couleur, motdepasse:real.motdepasse||''};
               localStorage.setItem('dx_users_override', JSON.stringify(saved));
               // Mettre à jour session active
               const sessionUser = JSON.parse(sessionStorage.getItem('dx_user')||'null');
