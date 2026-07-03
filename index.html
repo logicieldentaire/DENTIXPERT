@@ -1604,6 +1604,10 @@ const MODE_PAY = {
   virement: 'Virement',
   cheque: 'Chèque'
 };
+
+function nowHHMM() {
+  return new Date().toLocaleTimeString('fr-FR', {timeZone:'Africa/Casablanca', hour:'2-digit', minute:'2-digit', hour12:false});
+}
 const TODAY = new Date().toISOString().slice(0, 10);
 const age = d => new Date().getFullYear() - new Date(d).getFullYear();
 const ddmm = iso => iso ? iso.split('-').reverse().join('/') : '—';
@@ -4338,7 +4342,7 @@ function PayModal({
           plan: plan || null,
           acte,
           date: TODAY,
-          heure: new Date().toTimeString().slice(0,5),
+          heure: nowHHMM(),
           montant: m,
           mode,
           par: user.id,
@@ -5202,7 +5206,7 @@ function SaisieJour() {
           plan: planId,
           acte: newPlanLignes[0].acte,
           date: TODAY,
-          heure: new Date().toTimeString().slice(0,5),
+          heure: nowHHMM(),
           montant: m,
           mode,
           par: user.id,
@@ -5235,7 +5239,7 @@ function SaisieJour() {
         plan: planId,
         acte: acteLibre,
         date: TODAY,
-        heure: new Date().toTimeString().slice(0,5),
+        heure: nowHHMM(),
         montant: m,
         mode,
         par: user.id,
@@ -5252,7 +5256,7 @@ function SaisieJour() {
         plan: payFor.plan,
         acte: payFor.acte,
         date: TODAY,
-        heure: new Date().toTimeString().slice(0,5),
+        heure: nowHHMM(),
         montant: m,
         mode,
         par: user.id,
@@ -8789,7 +8793,7 @@ function Pointage() {
   const [filter, setFilter] = useState('semaine');
   
   const today = TODAY;
-  const now = new Date().toTimeString().slice(0,5);
+  const now = nowHHMM();
   
   // Pointage du user aujourd'hui
   const myToday = POINTAGES.find(p => p.user_id === user.id && p.date === today);
@@ -8857,7 +8861,7 @@ function Pointage() {
           )
         ),
         /*#__PURE__*/React.createElement("div", { style:{marginLeft:'auto',textAlign:'right'} },
-          /*#__PURE__*/React.createElement("div", { style:{color:'#fff',fontWeight:700,fontSize:18} }, new Date().toTimeString().slice(0,5)),
+          /*#__PURE__*/React.createElement("div", { style:{color:'#fff',fontWeight:700,fontSize:18} }, nowHHMM()),
           /*#__PURE__*/React.createElement("div", { style:{color:'#666',fontSize:12} }, new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}))
         )
       ),
@@ -9593,7 +9597,7 @@ function App() {
   const logAction = (action, type, detail, entite) => {
     const h = {
       id: 'h' + Date.now(),
-      t: new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toTimeString().slice(0, 5),
+      t: new Date().toLocaleDateString('fr-FR',{timeZone:'Africa/Casablanca'}) + ' ' + nowHHMM(),
       user: user?.id || 'u1',
       action,
       type,
@@ -9653,7 +9657,7 @@ function App() {
       addNotif('login', 'Connexion', u.prenom + ' ' + u.nom + ' connecté');
       const hLogin = {
         id: 'h' + Date.now(),
-        t: new Date().toLocaleDateString('fr-FR') + ' ' + new Date().toTimeString().slice(0, 5),
+        t: new Date().toLocaleDateString('fr-FR',{timeZone:'Africa/Casablanca'}) + ' ' + nowHHMM(),
         user: u.id,
         action: 'Connexion',
         type: 'login',
