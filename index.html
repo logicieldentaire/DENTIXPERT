@@ -2993,7 +2993,7 @@ function Dashboard() {
       overflowY: 'auto'
     }
   }, rdvRange.sort((a, b) => a.date === b.date ? a.heure.localeCompare(b.heure) : a.date.localeCompare(b.date)).map(r => {
-    const p = PATIENTS.find(x => x.id === r.patient);
+    const p = PATIENTS.find(x => x.id === r.patient) || {prenom:'?', nom:'Supprimé'};
     return /*#__PURE__*/React.createElement("div", {
       key: r.id,
       style: {
