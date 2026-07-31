@@ -420,6 +420,21 @@ const db = {
       this.err(e2, 'addPlanLignes');
     }
   },
+  async updatePlanLignes(planId, lignes) {
+    try {
+      await SUPA.from('dx_plan_lignes').delete().eq('plan_id', planId);
+      if (lignes?.length) {
+        const { error } = await SUPA.from('dx_plan_lignes').insert(lignes.map(l => ({
+          plan_id: planId,
+          acte: l.acte,
+          label: l.label,
+          dents: l.dents || '',
+          prix: l.prix || 0
+        })));
+        if (error) console.error('db.updatePlanLignes', error.message);
+      }
+    } catch(e) { console.error('db.updatePlanLignes', e?.message||'err'); }
+  },
   async addPlanLigne(planId, l) {
     try { await SUPA.from('dx_plan_lignes').insert({
       plan_id: planId,
@@ -4245,6 +4260,7 @@ function PlanModal({
         dents: l.dents,
         prix: parseInt(l.prix) || 0
       }));
+      db.updatePlanLignes(pl.id, pl.lignes).catch(() => {});
       logAction('Modification plan', 'update', 'Plan modifié — ' + pName(patientId), 'plan');
       toast('Plan modifié', 'success');
     } else {
