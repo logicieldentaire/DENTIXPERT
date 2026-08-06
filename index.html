@@ -257,6 +257,7 @@ textarea.inp{resize:vertical;min-height:64px;}
 .bn-item svg{flex-shrink:0;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
@@ -1624,6 +1625,56 @@ function nowHHMM() {
   return new Date().toLocaleTimeString('fr-FR', {timeZone:'Africa/Casablanca', hour:'2-digit', minute:'2-digit', hour12:false});
 }
 const TODAY = new Date().toISOString().slice(0, 10);
+
+function downloadCSV(filename, rows) {
+  // Génère un fichier Excel (.xlsx) formaté à partir de rows = [ [headers...], [row1...], [row2...] ]
+  try {
+    const xlsxName = filename.replace(/\.csv$/i, '.xlsx');
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const headerCount = rows[0] ? rows[0].length : 0;
+
+    // Largeur de colonnes auto (basée sur le contenu le plus long de chaque colonne)
+    const colWidths = [];
+    for (let c = 0; c < headerCount; c++) {
+      let maxLen = 10;
+      rows.forEach(r => {
+        const val = r[c];
+        const len = val === null || val === undefined ? 0 : String(val).length;
+        if (len > maxLen) maxLen = len;
+      });
+      colWidths.push({ wch: Math.min(maxLen + 2, 40) });
+    }
+    ws['!cols'] = colWidths;
+
+    // Style de l'en-tête (fond vert cabinet, texte blanc gras)
+    for (let c = 0; c < headerCount; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[cellRef]) {
+        ws[cellRef].s = {
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          fill: { fgColor: { rgb: '176B3A' } },
+          alignment: { vertical: 'center' }
+        };
+      }
+    }
+    // Figer la première ligne
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Export');
+    XLSX.writeFile(wb, xlsxName, { cellStyles: true });
+  } catch (e) {
+    console.error('Export Excel erreur:', e);
+    alert('Erreur export: ' + (e?.message || 'inconnue'));
+  }
+}
+function ExportBtn({onClick, label}) {
+  return /*#__PURE__*/React.createElement("button", {
+    className: "btn",
+    style: {background:"#fff",border:"1.5px solid #176B3A",color:"#176B3A"},
+    onClick: onClick
+  }, "\uD83D\uDCCA ", label||"Exporter Excel");
+}
 const age = d => new Date().getFullYear() - new Date(d).getFullYear();
 const ddmm = iso => iso ? iso.split('-').reverse().join('/') : '—';
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -2721,7 +2772,15 @@ function Encaissements() {
   };
 
   return /*#__PURE__*/React.createElement("div", {style:{display:"flex",flexDirection:"column",gap:16}},
-    /*#__PURE__*/React.createElement(PeriodFilter, {from,to,setFrom,setTo,preset,setPreset}),
+    /*#__PURE__*/React.createElement("div",{style:{display:'flex',gap:10,alignItems:'center'}},
+      /*#__PURE__*/React.createElement(PeriodFilter, {from,to,setFrom,setTo,preset,setPreset}),
+      /*#__PURE__*/React.createElement(ExportBtn, {
+        onClick: () => downloadCSV('encaissements_'+from+'_'+to+'.csv', [
+          ['Date','Heure','Patient','Acte','Par','Mode','Montant'],
+          ...list.map(p=>[p.date,p.heure||'',pName(p.patient),p.acte?acteName(p.acte):p.note||'',USERS.find(u=>u.id===p.par)?.prenom||'',MODE_PAY[p.mode]||'',p.montant])
+        ])
+      })
+    ),
     /*#__PURE__*/React.createElement("div", {className:"grid g3"},
       /*#__PURE__*/React.createElement(KPI, {ic:"cash",iconBg:"rgba(46,168,90,.13)",iconColor:"#2EA85A",val:fmtMAD(total),lbl:"total encaissé"}),
       /*#__PURE__*/React.createElement(KPI, {ic:"receipt",iconBg:"rgba(232,119,34,.13)",iconColor:"#E87722",val:list.length,lbl:"transactions"}),
@@ -3947,7 +4006,12 @@ function PatientsList() {
     placeholder: "Rechercher (nom, t\xE9l\xE9phone, CIN)\u2026",
     value: q,
     onChange: e => setQ(e.target.value)
-  })), /*#__PURE__*/React.createElement("button", {
+  })), /*#__PURE__*/React.createElement(ExportBtn, {
+    onClick: () => downloadCSV('patients_'+TODAY+'.csv', [
+      ['Nom','Prénom','Téléphone','CIN','Naissance','Mutuelle','Adresse'],
+      ...list.map(p=>[p.nom,p.prenom,p.tel,p.cin||'',p.naissance||'',p.mutuelle||'',p.adresse||''])
+    ])
+  }), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     style: {
       marginLeft: 'auto'
@@ -5706,7 +5770,12 @@ function ActesGestion() {
     n: "list-check",
     size: 18,
     color: "#176B3A"
-  }), " Actes"), /*#__PURE__*/React.createElement("button", {
+  }), " Actes"), /*#__PURE__*/React.createElement(ExportBtn, {
+    onClick: () => downloadCSV('actes_'+TODAY+'.csv', [
+      ['Nom','Catégorie','Dents requises'],
+      ...ACTES_NOM.map(a=>[a.nom, a.cat||'', a.dentsRequises?'Oui':'Non'])
+    ])
+  }), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri btn-sm",
     style: {
       marginLeft: 'auto'
@@ -6262,7 +6331,14 @@ function Agenda() {
         ),
         /*#__PURE__*/React.createElement("span", {className:"muted",style:{fontSize:13}},
           RDV.filter(r=>r.date>=listFrom&&r.date<=listTo).length + " RDV"
-        )
+        ),
+        /*#__PURE__*/React.createElement(ExportBtn, {
+          onClick: () => downloadCSV('rdv_'+listFrom+'_'+listTo+'.csv', [
+            ['Date','Heure','Patient','Motif','Praticien','Statut'],
+            ...RDV.filter(r=>r.date>=listFrom&&r.date<=listTo).sort((a,b)=>a.date.localeCompare(b.date)||a.heure.localeCompare(b.heure))
+              .map(r=>[r.date,r.heure,pName(r.patient),r.motif,USERS.find(u=>u.id===r.praticien)?.prenom||'',r.statut])
+          ])
+        })
       ),
       /*#__PURE__*/React.createElement("div", {className:"card",style:{overflow:'hidden'}},
         RDV.filter(r=>r.date>=listFrom&&r.date<=listTo).sort((a,b)=>a.date.localeCompare(b.date)||a.heure.localeCompare(b.heure)).length === 0
@@ -6444,9 +6520,14 @@ function Prothese() {
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex'
+      display: 'flex', gap: 10
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(ExportBtn, {
+    onClick: () => downloadCSV('protheses_'+TODAY+'.csv', [
+      ['Date','Patient','Type','Dents','Prothésiste','Statut','Prix patient','Coût labo','Marge','Labo payé'],
+      ...PROTH_TRAVAUX.map(tr=>[tr.date,pName(tr.patient),pActeName(tr.acte),tr.dents||'',prName(tr.prothesiste),PROTH_STATUT[tr.statut]?.label||tr.statut,tr.prixPatient,tr.coutLabo,(tr.prixPatient-tr.coutLabo),tr.payeLabo?'Oui':'Non'])
+    ])
+  }), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     style: {
       marginLeft: 'auto'
@@ -7417,9 +7498,15 @@ function Depenses() {
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      justifyContent: 'flex-end'
+      justifyContent: 'flex-end',
+      gap: 10
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(ExportBtn, {
+    onClick: () => downloadCSV('depenses_'+from+'_'+to+'.csv', [
+      ['Date','Catégorie','Description','Montant','Par'],
+      ...list.map(d=>[d.date,catDep(d.categorie).nom,d.description,d.montant,USERS.find(u=>u.id===d.par)?.prenom||''])
+    ])
+  }), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     onClick: () => setModal(true)
   }, /*#__PURE__*/React.createElement(Icon, {
@@ -8295,7 +8382,16 @@ function MutuellesPage() {
     setTo: setTo,
     preset: preset,
     setPreset: setPreset
-  }), /*#__PURE__*/React.createElement("div", {
+  }),
+  /*#__PURE__*/React.createElement("div", {style:{display:'flex',justifyContent:'flex-end'}},
+    /*#__PURE__*/React.createElement(ExportBtn, {
+      onClick: () => downloadCSV('mutuelles_'+from+'_'+to+'.csv', [
+        ['Date','Patient','Mutuelle','Montant','Par'],
+        ...list.map(m=>[m.date, m.patientNom?m.patientNom+' (non inscrit)':pName(m.patient), m.mutuelle, m.montant, USERS.find(u=>u.id===m.par)?.prenom||''])
+      ])
+    })
+  ),
+  /*#__PURE__*/React.createElement("div", {
     className: "grid g3"
   }, /*#__PURE__*/React.createElement(KPI, {
     ic: "building-hospital",
@@ -8913,7 +9009,16 @@ function Pointage() {
           [['jour',"Auj."],['semaine','Semaine'],['mois','Mois'],['tout','Tout']].map(([k,l]) =>
             /*#__PURE__*/React.createElement("button", {key:k,className:'pill'+(filter===k?' on':''),onClick:()=>setFilter(k)}, l)
           )
-        )
+        ),
+        /*#__PURE__*/React.createElement(ExportBtn, {
+          onClick: () => downloadCSV('pointage_'+TODAY+'.csv', [
+            ['Date','Utilisateur','Entrée','Sortie','Durée'],
+            ...list.map(p=>{
+              const u = USERS.find(x=>x.id===p.user_id);
+              return [p.date, u?(u.prenom+' '+u.nom):'?', p.heure_entree||'', p.heure_sortie||'', duree(p.heure_entree,p.heure_sortie)];
+            })
+          ])
+        })
       ),
       list.length === 0
         ? /*#__PURE__*/React.createElement(Empty, {icon:"clock-off",msg:"Aucun pointage sur cette période"})
@@ -8984,7 +9089,13 @@ function Historique() {
             f==='Tous'?'Tous':typeLabel[f]
           )
         )
-      )
+      ),
+      /*#__PURE__*/React.createElement(ExportBtn, {
+        onClick: () => downloadCSV('historique_'+TODAY+'.csv', [
+          ['Date/Heure','Utilisateur','Action','Type','Détail'],
+          ...logs.map(l=>[l.t, uInfo(l.user), l.action, typeLabel[l.type]||l.type, l.detail])
+        ])
+      })
     ),
     /*#__PURE__*/React.createElement("div", {className:"card", style:{overflow:'hidden'}},
       logs.length === 0 
