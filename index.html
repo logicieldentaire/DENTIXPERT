@@ -4007,10 +4007,33 @@ function PatientsList() {
     value: q,
     onChange: e => setQ(e.target.value)
   })), /*#__PURE__*/React.createElement(ExportBtn, {
-    onClick: () => downloadCSV('patients_'+TODAY+'.csv', [
-      ['Nom','Prénom','Téléphone','CIN','Naissance','Mutuelle','Adresse'],
-      ...list.map(p=>[p.nom,p.prenom,p.tel,p.cin||'',p.naissance||'',p.mutuelle||'',p.adresse||''])
-    ])
+    onClick: () => {
+      const rows = [['Nom','Prénom','Téléphone','CIN','Naissance','Mutuelle','Adresse','Date plan','Statut plan','Acte du plan','Dents','Prix acte','Total plan','Payé (plan)','Reste à payer']];
+      list.forEach(p => {
+        const fin = patientFinance(p.id);
+        const base = [p.nom,p.prenom,p.tel,p.cin||'',p.naissance||'',p.mutuelle||'',p.adresse||''];
+        if (fin.plans.length === 0) {
+          rows.push([...base, '', '', 'Aucun plan', '', '', '', '', '']);
+        } else {
+          fin.plans.forEach(pl => {
+            const total = planTotal(pl);
+            const restePlan = total - PAIEMENTS.filter(pay=>pay.patient===p.id && pay.plan===pl.id).reduce((s,pay)=>s+pay.montant,0);
+            if (pl.lignes.length === 0) {
+              rows.push([...base, pl.date, PLAN_STATUT?.[pl.statut]?.label||pl.statut, '(plan vide)', '', 0, total, total-restePlan, restePlan]);
+            } else {
+              pl.lignes.forEach((l, i) => {
+                rows.push([
+                  ...base, pl.date, PLAN_STATUT?.[pl.statut]?.label||pl.statut,
+                  l.label, l.dents||'', l.prix||0,
+                  i===0 ? total : '', i===0 ? (total-restePlan) : '', i===0 ? restePlan : ''
+                ]);
+              });
+            }
+          });
+        }
+      });
+      downloadCSV('patients_plans_'+TODAY+'.csv', rows);
+    }
   }), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-pri",
     style: {
