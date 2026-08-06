@@ -4019,11 +4019,11 @@ function PatientsList() {
             const total = planTotal(pl);
             const restePlan = total - PAIEMENTS.filter(pay=>pay.patient===p.id && pay.plan===pl.id).reduce((s,pay)=>s+pay.montant,0);
             if (pl.lignes.length === 0) {
-              rows.push([...base, pl.date, PLAN_STATUT?.[pl.statut]?.label||pl.statut, '(plan vide)', '', 0, total, total-restePlan, restePlan]);
+              rows.push([...base, pl.date, pl.statut, '(plan vide)', '', 0, total, total-restePlan, restePlan]);
             } else {
               pl.lignes.forEach((l, i) => {
                 rows.push([
-                  ...base, pl.date, PLAN_STATUT?.[pl.statut]?.label||pl.statut,
+                  ...base, pl.date, pl.statut,
                   l.label, l.dents||'', l.prix||0,
                   i===0 ? total : '', i===0 ? (total-restePlan) : '', i===0 ? restePlan : ''
                 ]);
