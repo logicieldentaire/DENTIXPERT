@@ -271,8 +271,34 @@ textarea.inp{resize:vertical;min-height:64px;}
 const SUPABASE_URL = 'https://drkqeqeohzxkjszpggwo.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRya3FlcWVvaHp4a2pzenBnZ3dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDMyNjUsImV4cCI6MjA5NTYxOTI2NX0.k__EzGcuLPFKGt2-jEtEYZIt4r7sHvcpqcbBE27PD-s';
 const SUPA = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+(function(){
+  function showDbErr(msg){
+    try{
+      console.error('Supabase écriture échouée:', msg);
+      var d=document.createElement('div');
+      d.textContent='⚠ Non sauvegardé : '+msg;
+      d.style.cssText='position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#B91C1C;color:#fff;padding:12px 18px;border-radius:10px;z-index:99999;font:600 13px DM Sans,sans-serif;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.3)';
+      document.body.appendChild(d);
+      setTimeout(function(){d.remove()},9000);
+    }catch(e){}
+  }
+  try{
+    var b=SUPA.from('dx_users').select('id'), proto=b;
+    while(proto && !Object.prototype.hasOwnProperty.call(proto,'then')) proto=Object.getPrototypeOf(proto);
+    if(proto){
+      var orig=proto.then;
+      proto.then=function(res,rej){
+        var self=this;
+        return orig.call(this,function(r){
+          try{ if(r && r.error && self.method && self.method!=='GET') showDbErr((self.url&&self.url.pathname?self.url.pathname.split('/').pop()+' : ':'')+(r.error.message||'erreur')); }catch(e){}
+          return res?res(r):r;
+        },rej);
+      };
+    }
+  }catch(e){console.error('patch supa',e)}
+})();
 async function loadAllData() {
-  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint, rCatDep] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('t', {ascending:false}).limit(200), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*'), SUPA.from('dx_categories_depenses').select('*')]);
+  const [rU, rP, rA, rPl, rPll, rPay, rPA, rPr, rPT, rPTr, rR, rM, rD, rPerm, rHist, rDep, rPoint, rCatDep] = await Promise.all([SUPA.from('dx_users').select('*'), SUPA.from('dx_patients').select('*').order('nom'), SUPA.from('dx_actes').select('*').order('cat'), SUPA.from('dx_plans').select('*'), SUPA.from('dx_plan_lignes').select('*'), SUPA.from('dx_paiements').select('*'), SUPA.from('dx_proth_actes').select('*'), SUPA.from('dx_prothesistes').select('*'), SUPA.from('dx_proth_tarifs').select('*'), SUPA.from('dx_proth_travaux').select('*'), SUPA.from('dx_rdv').select('*'), SUPA.from('dx_mutuelles').select('*'), SUPA.from('dx_dents_statut').select('*'), SUPA.from('dx_permissions').select('*'), SUPA.from('dx_historique').select('*').order('id', {ascending:false}).limit(500), SUPA.from('dx_depenses').select('*'), SUPA.from('dx_pointage').select('*'), SUPA.from('dx_categories_depenses').select('*')]);
   if (rU.error || rP.error) throw new Error('Connexion Supabase échouée');
   if (rU.data) {
     USERS = rU.data;
@@ -446,7 +472,7 @@ const db = {
     }); } catch(e) { console.error('db.addPlanLigne', e?.message||'err'); }
   },
   async addPaiement(p) {
-    try { await SUPA.from('dx_paiements').insert({
+    const row = {
       id: String(p.id),
       patient: String(p.patient),
       plan_id: p.plan ? String(p.plan) : null,
@@ -455,8 +481,16 @@ const db = {
       montant: parseInt(p.montant) || 0,
       mode: String(p.mode || 'especes'),
       par: String(p.par),
-      note: String(p.note || '')
-    }); } catch(e) { console.error('db.addPaiement', e?.message||'err'); }
+      note: String(p.note || ''),
+      heure: p.heure ? String(p.heure) : null
+    };
+    try {
+      let r = await SUPA.from('dx_paiements').insert(row);
+      if (r && r.error && /heure/i.test(r.error.message || '')) {
+        delete row.heure;
+        await SUPA.from('dx_paiements').insert(row);
+      }
+    } catch(e) { console.error('db.addPaiement', e?.message||'err'); }
   },
   async addProthTravail(t) {
     try { await SUPA.from('dx_proth_travaux').insert({
@@ -676,7 +710,7 @@ const db = {
     });
   },
   async addHistorique(h) {
-    await SUPA.from('dx_historique').insert({
+    try { await SUPA.from('dx_historique').insert({
       id: h.id,
       t: h.t,
       user_id: h.user,
@@ -684,7 +718,7 @@ const db = {
       type: h.type,
       detail: h.detail,
       entite: h.entite || ''
-    });
+    }); } catch(e) { console.error('db.addHistorique', e?.message||'err'); }
   }
 };
 
@@ -9746,7 +9780,7 @@ function App() {
   } : x));
   const logAction = (action, type, detail, entite) => {
     const h = {
-      id: 'h' + Date.now(),
+      id: 'h' + Date.now() + Math.floor(Math.random()*900+100),
       t: new Date().toLocaleDateString('fr-FR',{timeZone:'Africa/Casablanca'}) + ' ' + nowHHMM(),
       user: user?.id || 'u1',
       action,
