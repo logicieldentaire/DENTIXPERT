@@ -9205,7 +9205,9 @@ function Reclamations() {
   const [fs, setFs] = useState('all');
   const [ft, setFt] = useState('all');
   const [q, setQ] = useState('');
-  const list = RECLAMATIONS.filter(x => (fs === 'all' || x.statut === fs) && (ft === 'all' || x.type === ft) && (!q || (x.patient_nom + ' ' + x.description).toLowerCase().includes(q.toLowerCase())));
+  const [df, setDf] = useState('');
+  const [dt, setDt] = useState('');
+  const list = RECLAMATIONS.filter(x => (fs === 'all' || x.statut === fs) && (ft === 'all' || x.type === ft) && (!df || (x.date || '') >= df) && (!dt || (x.date || '') <= dt) && (!q || (x.patient_nom + ' ' + x.description).toLowerCase().includes(q.toLowerCase())));
   const nbOpen = RECLAMATIONS.filter(x => x.statut !== 'resolue').length;
   const setStatut = (x, s) => { const y = { ...x, statut: s, resolu_le: s === 'resolue' ? TODAY : '' }; RECLAMATIONS = RECLAMATIONS.map(z => z.id === x.id ? y : z); dbx.saveReclam(y); logAction('Statut réclamation', 'update', x.patient_nom + ' → ' + RECL_STATUTS[s][0], 'reclamation'); r(v => v + 1); };
   const del = x => { if (!window.confirm('Supprimer cette réclamation ?')) return; RECLAMATIONS = RECLAMATIONS.filter(z => z.id !== x.id); dbx.deleteReclam(x.id); logAction('Suppression réclamation', 'delete', x.patient_nom + ' — ' + x.type, 'reclamation'); toast('Réclamation supprimée', 'success'); r(v => v + 1); };
@@ -9215,6 +9217,7 @@ function Reclamations() {
       rc('input', { className: 'inp', style: { maxWidth: 220 }, placeholder: 'Rechercher…', value: q, onChange: e => setQ(e.target.value) }),
       rc('select', { className: 'inp', style: { maxWidth: 160 }, value: fs, onChange: e => setFs(e.target.value) }, rc('option', { value: 'all' }, 'Tous statuts'), Object.keys(RECL_STATUTS).map(k => rc('option', { key: k, value: k }, RECL_STATUTS[k][0]))),
       rc('select', { className: 'inp', style: { maxWidth: 160 }, value: ft, onChange: e => setFt(e.target.value) }, rc('option', { value: 'all' }, 'Tous types'), RECL_TYPES.map(t => rc('option', { key: t, value: t }, t))),
+      rc('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#555' } }, 'Du ', rc('input', { className: 'inp', type: 'date', style: { width: 140 }, value: df, onChange: e => setDf(e.target.value) }), ' au ', rc('input', { className: 'inp', type: 'date', style: { width: 140 }, value: dt, onChange: e => setDt(e.target.value) }), (df || dt) && rc('button', { className: 'btn btn-sec btn-sm', onClick: () => { setDf(''); setDt(''); } }, '✕')),
       rc('span', { style: { fontSize: 12.5, fontWeight: 600, color: nbOpen ? '#DC2626' : '#176B3A' } }, nbOpen + ' à traiter'),
       rc('div', { style: { marginLeft: 'auto', display: 'flex', gap: 8 } }, rc(ExportBtn, { onClick: exp }), rc('button', { className: 'btn btn-pri', onClick: () => setModal({}) }, rc(Icon, { n: 'plus', size: 15 }), ' Nouvelle réclamation'))),
     list.length === 0 ? rc(Empty, { icon: 'clipboard-off', msg: 'Aucune réclamation' }) :
@@ -9434,14 +9437,19 @@ function Pointage() {
 function Historique() {
   const {user, refresh} = useApp();
   const [filter, setFilter] = useState('Tous');
+  const [hFrom, setHFrom] = useState('');
+  const [hTo, setHTo] = useState('');
   const [sel, setSel] = useState(null);
   const [,r] = useState(0);
+  const hIso = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})(?:\D+(\d{2}:\d{2}))?/.exec(s||''); return m ? m[3]+'-'+m[2]+'-'+m[1]+' '+(m[4]||'00:00') : (s||''); };
   
   const typeColor = {create:'#2EA85A', update:'#3B82F6', delete:'#DC2626', login:'#9CA3AF'};
   const typeLabel = {create:'Création', update:'Modification', delete:'Suppression', login:'Connexion'};
   
-  let logs = [...HISTORIQUE].sort((a,b) => b.t.localeCompare(a.t));
+  let logs = [...HISTORIQUE].sort((a,b) => hIso(b.t).localeCompare(hIso(a.t)));
   if(filter !== 'Tous') logs = logs.filter(l => l.type === filter);
+  if(hFrom) logs = logs.filter(l => hIso(l.t).slice(0,10) >= hFrom);
+  if(hTo) logs = logs.filter(l => hIso(l.t).slice(0,10) <= hTo);
   
   const uInfo = (uid) => {
     const u = USERS.find(x=>x.id===uid);
@@ -9451,7 +9459,12 @@ function Historique() {
   return /*#__PURE__*/React.createElement("div", {style:{display:'flex',flexDirection:'column',gap:16}},
     /*#__PURE__*/React.createElement("div", {className:"card card-pad", style:{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}},
       /*#__PURE__*/React.createElement("div", {className:"sec-title"}, /*#__PURE__*/React.createElement(Icon, {n:"history-toggle",size:18,color:"#176B3A"}), " Historique complet"),
-      /*#__PURE__*/React.createElement("div", {className:"pills", style:{marginLeft:'auto'}},
+      /*#__PURE__*/React.createElement("div", {style:{display:'flex',alignItems:'center',gap:6,fontSize:12.5,color:'#555',marginLeft:'auto'}},
+        "Du ", /*#__PURE__*/React.createElement("input", {className:"inp", type:"date", style:{width:140}, value:hFrom, onChange:e=>setHFrom(e.target.value)}),
+        " au ", /*#__PURE__*/React.createElement("input", {className:"inp", type:"date", style:{width:140}, value:hTo, onChange:e=>setHTo(e.target.value)}),
+        (hFrom||hTo) && /*#__PURE__*/React.createElement("button", {className:"btn btn-sec btn-sm", onClick:()=>{setHFrom('');setHTo('');}}, "✕")
+      ),
+      /*#__PURE__*/React.createElement("div", {className:"pills"},
         ['Tous','create','update','delete','login'].map(f =>
           /*#__PURE__*/React.createElement("button", {key:f, className:'pill'+(filter===f?' on':''), onClick:()=>setFilter(f)},
             f==='Tous'?'Tous':typeLabel[f]
