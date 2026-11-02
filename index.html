@@ -385,6 +385,12 @@ async function loadAllData() {
       });
     }
   }
+  try {
+    const [rCT, rCF, rRe] = await Promise.all([SUPA.from('dx_checklist_taches').select('*'), SUPA.from('dx_checklist_faits').select('*'), SUPA.from('dx_reclamations').select('*')]);
+    if (rCT && rCT.data) CHK_TACHES = rCT.data;
+    if (rCF && rCF.data) CHK_FAITS = rCF.data;
+    if (rRe && rRe.data) RECLAMATIONS = rRe.data.sort((a, b) => ((b.date || '') + (b.heure || '')).localeCompare((a.date || '') + (a.heure || '')));
+  } catch (e) { console.error('load checklist/reclamations', e?.message); }
 }
 
 /* ════════ DB WRITE HELPERS ════════ */
@@ -963,7 +969,8 @@ let PERMS = {
     historique: false,
     mutuelle: true,
     depenses: false,
-    pointage: false
+    pointage: false,
+    reclamations: false
   },
   assistante: {
     patients: true,
@@ -976,7 +983,8 @@ let PERMS = {
     historique: false,
     mutuelle: true,
     depenses: false,
-    pointage: false
+    pointage: false,
+    reclamations: false
   }
 };
 // Charger les permissions depuis localStorage SYNCHRONE (avant React)
@@ -1001,6 +1009,7 @@ const PERM_LABELS = {
   finances: 'Finances',
   depenses: 'Dépenses',
   pointage: 'Pointage',
+  reclamations: 'Réclamations patients',
   stats: 'Statistiques',
   historique: 'Historique'
 };
@@ -2038,7 +2047,7 @@ function PeriodFilter({
     }
   })));
 }
-const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['receipt', 'Encaissements', 'encaissements', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['clock', 'Pointage', 'pointage', 'pointage'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
+const NAV_ALL = [['layout-dashboard', 'Tableau de bord', 'dashboard', 'always'], ['users', 'Patients', 'patients', 'patients'], ['pencil-plus', 'Saisie du jour', 'saisie', 'saisie'], ['calendar-month', 'Rendez-vous', 'agenda', 'agenda'], ['dental', 'Prothèses', 'prothese', 'prothese'], ['list-check', 'Gérer les actes', 'actes', 'actes'], ['building-hospital', 'Mutuelles', 'mutuelle', 'mutuelle'], ['cash-register', 'Finances', 'finances', 'finances'], ['receipt', 'Encaissements', 'encaissements', 'finances'], ['trending-down', 'Dépenses', 'depenses', 'depenses'], ['clock', 'Pointage', 'pointage', 'pointage'], ['clipboard-check', 'Checklist', 'checklist', 'settings_admin'], ['alert-circle', 'Réclamations', 'reclamations', 'reclamations'], ['chart-histogram', 'Statistiques', 'stats', 'stats'], ['history-toggle', 'Historique', 'historique', 'historique'], ['settings-2', 'Réglages', 'settings', 'settings_admin']];
 function canAccess(user, permKey) {
   if (permKey === 'always') return true;
   if (user.role === 'admin') return true;
@@ -2056,6 +2065,8 @@ const PAGE_TITLES = {
   finances: 'Finances',
   depenses: 'Dépenses',
   pointage: 'Pointage',
+  checklist: 'Checklist',
+  reclamations: 'Réclamations patients',
   stats: 'Statistiques',
   historique: 'Historique',
   settings: 'Réglages'
@@ -3838,7 +3849,7 @@ function PatientForm({
     adresse: '',
     cin: '',
     mutuelle: 'Aucune',
-    risque: false,
+    risque: null,
     maladie: '',
     allergie: ''
   });
@@ -3856,11 +3867,12 @@ function PatientForm({
       onClick: onClose
     }, "Annuler"), /*#__PURE__*/React.createElement("button", {
       className: "btn btn-pri",
-      disabled: !f.nom || !f.prenom,
+      disabled: !f.nom || !f.prenom || !f.tel || !f.naissance || f.risque === null,
       onClick: () => {
         const np = {
           id: 'p' + Date.now(),
           ...f,
+          risque: !!f.risque,
           creele: TODAY
         };
         PATIENTS.push(np);
@@ -3892,13 +3904,13 @@ function PatientForm({
     value: f.prenom,
     onChange: e => up('prenom', e.target.value)
   })), /*#__PURE__*/React.createElement(Field, {
-    label: "Date de naissance"
+    label: "Date de naissance (âge) *"
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
     type: "date",
     value: f.naissance,
     onChange: e => up('naissance', e.target.value)
-  })), /*#__PURE__*/React.createElement(Field, {
+  }), f.naissance && /*#__PURE__*/React.createElement("div", {style:{fontSize:11,color:"#176B3A",marginTop:3,fontWeight:600}}, Math.floor((Date.now()-new Date(f.naissance).getTime())/31557600000)+" ans")), /*#__PURE__*/React.createElement(Field, {
     label: "Genre"
   }, /*#__PURE__*/React.createElement("select", {
     className: "inp",
@@ -3909,7 +3921,7 @@ function PatientForm({
   }, "Homme"), /*#__PURE__*/React.createElement("option", {
     value: "F"
   }, "Femme"))), /*#__PURE__*/React.createElement(Field, {
-    label: "T\xE9l\xE9phone",
+    label: "T\xE9l\xE9phone *",
     req: true
   }, /*#__PURE__*/React.createElement("input", {
     className: "inp",
@@ -3952,11 +3964,11 @@ function PatientForm({
     n: "alert-triangle",
     size: 16
   }), " Informations m\xE9dicales"), /*#__PURE__*/React.createElement(Field, {
-    label: "Patient \xE0 risque ?"
+    label: "Patient \xE0 risque ? *"
   }, /*#__PURE__*/React.createElement("div", {
     className: "toggle"
   }, /*#__PURE__*/React.createElement("button", {
-    className: 'tog-opt' + (!f.risque ? ' on' : ''),
+    className: 'tog-opt' + (f.risque === false ? ' on' : ''),
     onClick: () => up('risque', false)
   }, "Non"), /*#__PURE__*/React.createElement("button", {
     className: 'tog-opt' + (f.risque ? ' on' : ''),
@@ -8957,6 +8969,306 @@ function Stats() {
 /* ═══════════════════════════════════════
    SYSTÈME DE POINTAGE
    ═══════════════════════════════════════ */
+/* ════════ CHECKLIST · RÉCLAMATIONS · EXPORT COMPLET ════════ */
+const rc = React.createElement;
+let CHK_TACHES = [];
+let CHK_FAITS = [];
+let RECLAMATIONS = [];
+const CHK_LISTES = ['Maintenance', 'Tâches récurrentes', 'To do'];
+const CHK_FREQ = { once: 'Une seule fois', daily: 'Tous les jours', weekly: 'Chaque semaine', monthly: 'Chaque mois' };
+const JOURS7 = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const RECL_TYPES = ['CNSS', 'Mutuelle', 'Paiement', 'Soin', 'Rendez-vous', 'Autre'];
+const RECL_STATUTS = { ouverte: ['Ouverte', '#DC2626', '#FEE2E2'], en_cours: ['En cours', '#CA8A04', '#FEF3C7'], resolue: ['Résolue', '#176B3A', '#DCFCE7'] };
+
+const dbx = {
+  async saveTache(t) {
+    try { await SUPA.from('dx_checklist_taches').upsert({ id: t.id, titre: t.titre, description: t.description || '', liste: t.liste || 'To do', assignee: t.assignee || '', freq: t.freq || 'once', jours: t.jours || '', jour_mois: t.jour_mois || '', date_debut: t.date_debut || '', actif: t.actif !== false, cree_par: t.cree_par || '' }); } catch (e) { console.error('dbx.saveTache', e?.message); }
+  },
+  async deleteTache(id) {
+    try { await SUPA.from('dx_checklist_faits').delete().eq('tache_id', id); await SUPA.from('dx_checklist_taches').delete().eq('id', id); } catch (e) { console.error('dbx.deleteTache', e?.message); }
+  },
+  async setFait(f, on) {
+    try {
+      if (on) await SUPA.from('dx_checklist_faits').upsert({ id: f.id, tache_id: f.tache_id, date: f.date, user_id: f.user_id, fait_le: f.fait_le });
+      else await SUPA.from('dx_checklist_faits').delete().eq('id', f.id);
+    } catch (e) { console.error('dbx.setFait', e?.message); }
+  },
+  async saveReclam(r) {
+    try { await SUPA.from('dx_reclamations').upsert({ id: r.id, patient_id: r.patient_id || '', patient_nom: r.patient_nom || '', type: r.type, description: r.description || '', statut: r.statut || 'ouverte', cree_par: r.cree_par || '', date: r.date, heure: r.heure || '', resolu_le: r.resolu_le || '', note: r.note || '' }); } catch (e) { console.error('dbx.saveReclam', e?.message); }
+  },
+  async deleteReclam(id) {
+    try { await SUPA.from('dx_reclamations').delete().eq('id', id); } catch (e) { console.error('dbx.deleteReclam', e?.message); }
+  }
+};
+
+function chkOccurs(t, d) {
+  if (!t || t.actif === false) return false;
+  const start = t.date_debut || '';
+  if (start && d < start) return false;
+  const dt = new Date(d + 'T12:00:00');
+  if (t.freq === 'daily') return true;
+  if (t.freq === 'weekly') {
+    const jours = (t.jours || '').split(',').filter(x => x !== '');
+    const wd = String((dt.getDay() + 6) % 7);
+    if (jours.length) return jours.includes(wd);
+    return start ? new Date(start + 'T12:00:00').getDay() === dt.getDay() : false;
+  }
+  if (t.freq === 'monthly') {
+    const jm = parseInt(t.jour_mois) || (start ? parseInt(start.slice(8, 10)) : 1);
+    return dt.getDate() === jm;
+  }
+  return d === start;
+}
+const chkFait = (tid, d) => CHK_FAITS.find(f => f.id === tid + '_' + d);
+const userLabel = id => { const u = USERS.find(x => x.id === id); return u ? (u.role === 'admin' ? u.prenom : (u.role === 'assistante' ? u.prenom : 'Dr. ' + u.prenom)) : '—'; };
+
+/* ── Widget dashboard : tâches du jour ── */
+function TasksWidget() {
+  const { user, logAction } = useApp();
+  const [, r] = useState(0);
+  const mine = CHK_TACHES.filter(t => t.assignee === user.id);
+  const today = mine.filter(t => chkOccurs(t, TODAY));
+  const late = mine.filter(t => t.freq === 'once' && t.actif !== false && (t.date_debut || '') < TODAY && !chkFait(t.id, t.date_debut));
+  const rows = [...late.map(t => ({ t, d: t.date_debut, late: true })), ...today.map(t => ({ t, d: TODAY }))];
+  if (!rows.length) return null;
+  const done = rows.filter(x => chkFait(x.t.id, x.d)).length;
+  const toggle = x => {
+    const id = x.t.id + '_' + x.d;
+    const ex = chkFait(x.t.id, x.d);
+    if (ex) {
+      CHK_FAITS = CHK_FAITS.filter(f => f.id !== id);
+      dbx.setFait({ id }, false);
+      logAction('Checklist', 'update', 'Tâche décochée : ' + x.t.titre, 'checklist');
+    } else {
+      const f = { id, tache_id: x.t.id, date: x.d, user_id: user.id, fait_le: new Date().toLocaleDateString('fr-FR', { timeZone: 'Africa/Casablanca' }) + ' ' + nowHHMM() };
+      CHK_FAITS.push(f);
+      dbx.setFait(f, true);
+      logAction('Checklist', 'update', 'Tâche faite : ' + x.t.titre, 'checklist');
+    }
+    r(v => v + 1);
+  };
+  return rc('div', { className: 'card', style: { marginBottom: 14, padding: 16 } },
+    rc('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
+      rc(Icon, { n: 'clipboard-check', size: 19, color: '#176B3A' }),
+      rc('strong', { style: { fontSize: 14 } }, 'Mes tâches du jour'),
+      rc('span', { style: { marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: done === rows.length ? '#176B3A' : '#E87722' } }, done + ' / ' + rows.length)),
+    rows.map(x => {
+      const ok = !!chkFait(x.t.id, x.d);
+      return rc('label', { key: x.t.id + x.d, style: { display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 4px', borderTop: '1px solid #f0f0f0', cursor: 'pointer' } },
+        rc('input', { type: 'checkbox', checked: ok, onChange: () => toggle(x), style: { width: 18, height: 18, marginTop: 2, accentColor: '#176B3A' } }),
+        rc('div', { style: { flex: 1 } },
+          rc('div', { style: { fontSize: 13.5, fontWeight: 600, textDecoration: ok ? 'line-through' : 'none', color: ok ? '#999' : '#111' } }, x.t.titre),
+          (x.t.description || x.t.liste) && rc('div', { style: { fontSize: 11.5, color: '#888' } }, (x.t.liste || '') + (x.t.description ? ' · ' + x.t.description : ''))),
+        x.late && !ok && rc('span', { style: { fontSize: 11, fontWeight: 700, color: '#DC2626', background: '#FEE2E2', padding: '2px 8px', borderRadius: 20 } }, 'En retard · ' + ddmm(x.d)));
+    }));
+}
+
+/* ── Formulaire tâche ── */
+function TacheModal({ tache, onClose }) {
+  const { user, toast, logAction } = useApp();
+  const [f, setF] = useState(tache || { titre: '', description: '', liste: 'To do', assignee: (USERS.find(u => u.role === 'assistante') || USERS[0] || {}).id || '', freq: 'once', jours: '', jour_mois: '', date_debut: TODAY, actif: true });
+  const up = (k, v) => setF({ ...f, [k]: v });
+  const jours = (f.jours || '').split(',').filter(x => x !== '');
+  const togJ = i => { const s = String(i); up('jours', (jours.includes(s) ? jours.filter(x => x !== s) : [...jours, s]).sort().join(',')); };
+  const valid = f.titre.trim() && f.assignee && (f.freq !== 'once' || f.date_debut) && (f.freq !== 'weekly' || jours.length);
+  const save = () => {
+    const t = { ...f, titre: f.titre.trim(), id: f.id || 'tk' + Date.now(), cree_par: f.cree_par || user.id };
+    if (f.id) CHK_TACHES = CHK_TACHES.map(x => x.id === t.id ? t : x); else CHK_TACHES.push(t);
+    dbx.saveTache(t);
+    logAction(f.id ? 'Modification tâche' : 'Nouvelle tâche', f.id ? 'update' : 'create', t.titre + ' → ' + userLabel(t.assignee) + ' (' + CHK_FREQ[t.freq] + ')', 'checklist');
+    toast('Tâche enregistrée', 'success');
+    onClose();
+  };
+  return rc(Modal, { title: f.id ? 'Modifier la tâche' : 'Nouvelle tâche', icon: 'clipboard-plus', onClose, footer: rc(React.Fragment, null, rc('button', { className: 'btn btn-sec', onClick: onClose }, 'Annuler'), rc('button', { className: 'btn btn-pri', disabled: !valid, onClick: save }, 'Enregistrer')) },
+    rc(Field, { label: 'Tâche', req: true }, rc('input', { className: 'inp', value: f.titre, onChange: e => up('titre', e.target.value), placeholder: 'Ex : Stériliser les instruments' })),
+    rc(Field, { label: 'Détail (optionnel)' }, rc('input', { className: 'inp', value: f.description, onChange: e => up('description', e.target.value) })),
+    rc('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+      rc(Field, { label: 'Liste' }, rc('input', { className: 'inp', list: 'chk-listes', value: f.liste, onChange: e => up('liste', e.target.value) }), rc('datalist', { id: 'chk-listes' }, CHK_LISTES.map(l => rc('option', { key: l, value: l })))),
+      rc(Field, { label: 'Assignée à', req: true }, rc('select', { className: 'inp', value: f.assignee, onChange: e => up('assignee', e.target.value) }, USERS.filter(u => u.actif !== false).map(u => rc('option', { key: u.id, value: u.id }, userLabel(u.id) + ' (' + (ROLES[u.role]?.label || u.role) + ')'))))),
+    rc('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+      rc(Field, { label: 'Fréquence' }, rc('select', { className: 'inp', value: f.freq, onChange: e => up('freq', e.target.value) }, Object.keys(CHK_FREQ).map(k => rc('option', { key: k, value: k }, CHK_FREQ[k])))),
+      rc(Field, { label: f.freq === 'once' ? 'Date' : 'À partir du', req: f.freq === 'once' }, rc('input', { className: 'inp', type: 'date', value: f.date_debut, onChange: e => up('date_debut', e.target.value) }))),
+    f.freq === 'weekly' && rc(Field, { label: 'Jours de la semaine', req: true }, rc('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } }, JOURS7.map((j, i) => rc('button', { key: j, type: 'button', onClick: () => togJ(i), className: 'btn btn-sm', style: { background: jours.includes(String(i)) ? '#176B3A' : '#fff', color: jours.includes(String(i)) ? '#fff' : '#555', border: '1.5px solid ' + (jours.includes(String(i)) ? '#176B3A' : '#ddd') } }, j)))),
+    f.freq === 'monthly' && rc(Field, { label: 'Jour du mois (1-31)' }, rc('input', { className: 'inp', type: 'number', min: 1, max: 31, value: f.jour_mois, onChange: e => up('jour_mois', e.target.value), placeholder: f.date_debut ? f.date_debut.slice(8, 10) : '1' })),
+    f.id && rc('label', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginTop: 6 } }, rc('input', { type: 'checkbox', checked: f.actif !== false, onChange: e => up('actif', e.target.checked) }), 'Tâche active'));
+}
+
+/* ── Page Checklist (admin) ── */
+function ChecklistPage() {
+  const { user, toast, logAction } = useApp();
+  const [, r] = useState(0);
+  const [tab, setTab] = useState('taches');
+  const [modal, setModal] = useState(null);
+  const d30 = new Date(Date.now() - 29 * 864e5).toISOString().slice(0, 10);
+  const [from, setFrom] = useState(d30);
+  const [to, setTo] = useState(TODAY);
+  const [fu, setFu] = useState('all');
+  const [fs, setFs] = useState('all');
+  const [fl, setFl] = useState('all');
+  const listes = [...new Set([...CHK_LISTES, ...CHK_TACHES.map(t => t.liste).filter(Boolean)])];
+  const hist = useMemo(() => {
+    const out = [];
+    const end = to > TODAY ? TODAY : to;
+    let d = new Date(from + 'T12:00:00'), n = 0;
+    while (d.toISOString().slice(0, 10) <= end && n++ < 400) {
+      const iso = d.toISOString().slice(0, 10);
+      CHK_TACHES.forEach(t => {
+        if (!chkOccurs(t, iso)) return;
+        if (fu !== 'all' && t.assignee !== fu) return;
+        if (fl !== 'all' && t.liste !== fl) return;
+        const f = chkFait(t.id, iso);
+        if (fs === 'fait' && !f) return;
+        if (fs === 'non' && f) return;
+        out.push({ date: iso, t, f });
+      });
+      d.setDate(d.getDate() + 1);
+    }
+    return out.sort((a, b) => b.date.localeCompare(a.date) || a.t.titre.localeCompare(b.t.titre));
+  }, [from, to, fu, fs, fl, CHK_TACHES.length, CHK_FAITS.length, modal]);
+  const nbFait = hist.filter(x => x.f).length;
+  const del = t => {
+    if (!window.confirm('Supprimer la tâche « ' + t.titre + ' » et son historique ?')) return;
+    CHK_TACHES = CHK_TACHES.filter(x => x.id !== t.id);
+    CHK_FAITS = CHK_FAITS.filter(f => f.tache_id !== t.id);
+    dbx.deleteTache(t.id);
+    logAction('Suppression tâche', 'delete', t.titre, 'checklist');
+    toast('Tâche supprimée', 'success');
+    r(v => v + 1);
+  };
+  const exportHist = () => downloadCSV('checklist_historique_' + TODAY + '.csv', [['Date', 'Tâche', 'Liste', 'Assignée à', 'Statut', 'Fait le'], ...hist.map(x => [ddmm(x.date), x.t.titre, x.t.liste, userLabel(x.t.assignee), x.f ? 'Fait' : 'Non fait', x.f ? x.f.fait_le : ''])]);
+  return rc('div', null,
+    rc('div', { className: 'tabs' }, [['taches', 'Tâches'], ['historique', 'Historique']].map(([k, l]) => rc('button', { key: k, className: 'tab' + (tab === k ? ' on' : ''), onClick: () => setTab(k) }, l))),
+    tab === 'taches' && rc('div', { className: 'card', style: { overflow: 'hidden' } },
+      rc('div', { className: 'card-pad', style: { display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--color-border)' } },
+        rc('div', { className: 'sec-title' }, rc(Icon, { n: 'clipboard-check', size: 18, color: '#176B3A' }), ' Tâches assignées'),
+        rc('button', { className: 'btn btn-pri btn-sm', style: { marginLeft: 'auto' }, onClick: () => setModal({}) }, rc(Icon, { n: 'plus', size: 15 }), ' Nouvelle tâche')),
+      CHK_TACHES.length === 0 ? rc(Empty, { icon: 'clipboard-off', msg: 'Aucune tâche. Crée la première et assigne-la à quelqu’un.' }) :
+        rc('div', { className: 'tbl-scroll' }, rc('table', { className: 'tbl' },
+          rc('thead', null, rc('tr', null, ['Tâche', 'Liste', 'Assignée à', 'Fréquence', 'Statut', ''].map(h => rc('th', { key: h }, h)))),
+          rc('tbody', null, CHK_TACHES.map(t => rc('tr', { key: t.id, style: { opacity: t.actif === false ? .5 : 1 } },
+            rc('td', null, rc('div', { style: { fontWeight: 600 } }, t.titre), t.description && rc('div', { className: 'muted', style: { fontSize: 11.5 } }, t.description)),
+            rc('td', null, t.liste),
+            rc('td', null, userLabel(t.assignee)),
+            rc('td', null, CHK_FREQ[t.freq] + (t.freq === 'weekly' ? ' (' + (t.jours || '').split(',').filter(x => x !== '').map(i => JOURS7[i]).join(', ') + ')' : t.freq === 'monthly' ? ' (le ' + (t.jour_mois || (t.date_debut || '').slice(8, 10) || '1') + ')' : ' · ' + ddmm(t.date_debut))),
+            rc('td', null, t.actif === false ? 'Inactive' : 'Active'),
+            rc('td', { style: { whiteSpace: 'nowrap' } },
+              rc('button', { className: 'btn-ghost', title: 'Modifier', onClick: () => setModal(t) }, '✏️'),
+              rc('button', { className: 'btn-ghost', title: 'Supprimer', onClick: () => del(t) }, '🗑️')))))))),
+    tab === 'historique' && rc('div', null,
+      rc('div', { className: 'card card-pad', style: { marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' } },
+        rc(Field, { label: 'Du' }, rc('input', { className: 'inp', type: 'date', value: from, onChange: e => setFrom(e.target.value) })),
+        rc(Field, { label: 'Au' }, rc('input', { className: 'inp', type: 'date', value: to, onChange: e => setTo(e.target.value) })),
+        rc(Field, { label: 'Personne' }, rc('select', { className: 'inp', value: fu, onChange: e => setFu(e.target.value) }, rc('option', { value: 'all' }, 'Tous'), USERS.map(u => rc('option', { key: u.id, value: u.id }, userLabel(u.id))))),
+        rc(Field, { label: 'Statut' }, rc('select', { className: 'inp', value: fs, onChange: e => setFs(e.target.value) }, rc('option', { value: 'all' }, 'Tous'), rc('option', { value: 'fait' }, 'Fait'), rc('option', { value: 'non' }, 'Non fait'))),
+        rc(Field, { label: 'Liste' }, rc('select', { className: 'inp', value: fl, onChange: e => setFl(e.target.value) }, rc('option', { value: 'all' }, 'Toutes'), listes.map(l => rc('option', { key: l, value: l }, l)))),
+        rc('div', { style: { marginLeft: 'auto' } }, rc(ExportBtn, { onClick: exportHist }))),
+      rc('div', { style: { fontSize: 13, fontWeight: 600, margin: '0 4px 10px' } }, nbFait + ' faites · ' + (hist.length - nbFait) + ' non faites · ' + (hist.length ? Math.round(nbFait / hist.length * 100) : 0) + '%'),
+      hist.length === 0 ? rc(Empty, { icon: 'clipboard-off', msg: 'Aucune tâche sur cette période' }) :
+        rc('div', { className: 'card', style: { overflow: 'hidden' } }, rc('div', { className: 'tbl-scroll' }, rc('table', { className: 'tbl' },
+          rc('thead', null, rc('tr', null, ['Date', 'Tâche', 'Liste', 'Assignée à', 'Statut', 'Fait le'].map(h => rc('th', { key: h }, h)))),
+          rc('tbody', null, hist.map(x => rc('tr', { key: x.t.id + x.date },
+            rc('td', null, ddmm(x.date)), rc('td', { style: { fontWeight: 600 } }, x.t.titre), rc('td', null, x.t.liste), rc('td', null, userLabel(x.t.assignee)),
+            rc('td', null, rc('span', { style: { fontWeight: 700, color: x.f ? '#176B3A' : '#DC2626' } }, x.f ? '✓ Fait' : '✗ Non fait')),
+            rc('td', { className: 'muted' }, x.f ? x.f.fait_le : '—')))))))),
+    modal && rc(TacheModal, { tache: modal.id ? modal : null, onClose: () => { setModal(null); r(v => v + 1); } }));
+}
+
+/* ── Réclamations patients ── */
+function ReclamModal({ rec, onClose }) {
+  const { user, toast, logAction } = useApp();
+  const [f, setF] = useState(rec || { patient_nom: '', patient_id: '', type: 'CNSS', description: '', statut: 'ouverte', note: '' });
+  const up = (k, v) => setF({ ...f, [k]: v });
+  const setNom = v => { const p = PATIENTS.find(x => (x.prenom + ' ' + x.nom).toLowerCase() === v.toLowerCase()); setF({ ...f, patient_nom: v, patient_id: p ? p.id : '' }); };
+  const save = () => {
+    const isNew = !f.id;
+    const x = { ...f, id: f.id || 'rcl' + Date.now(), cree_par: f.cree_par || user.id, date: f.date || TODAY, heure: f.heure || nowHHMM() };
+    if (x.statut === 'resolue' && !x.resolu_le) x.resolu_le = TODAY;
+    if (x.statut !== 'resolue') x.resolu_le = '';
+    if (isNew) RECLAMATIONS.unshift(x); else RECLAMATIONS = RECLAMATIONS.map(y => y.id === x.id ? x : y);
+    dbx.saveReclam(x);
+    logAction(isNew ? 'Nouvelle réclamation' : 'Modification réclamation', isNew ? 'create' : 'update', x.patient_nom + ' — ' + x.type + ' — ' + (RECL_STATUTS[x.statut] || [''])[0], 'reclamation');
+    toast('Réclamation enregistrée', 'success');
+    onClose();
+  };
+  return rc(Modal, { title: f.id ? 'Réclamation' : 'Nouvelle réclamation', icon: 'alert-circle', onClose, footer: rc(React.Fragment, null, rc('button', { className: 'btn btn-sec', onClick: onClose }, 'Annuler'), rc('button', { className: 'btn btn-pri', disabled: !f.patient_nom.trim() || !f.description.trim(), onClick: save }, 'Enregistrer')) },
+    rc(Field, { label: 'Patient', req: true }, rc('input', { className: 'inp', list: 'recl-patients', value: f.patient_nom, onChange: e => setNom(e.target.value), placeholder: 'Rechercher ou saisir un nom…' }), rc('datalist', { id: 'recl-patients' }, PATIENTS.slice(0, 800).map(p => rc('option', { key: p.id, value: p.prenom + ' ' + p.nom }))), f.patient_id && rc('div', { style: { fontSize: 11, color: '#176B3A', marginTop: 3 } }, '✓ Patient enregistré')),
+    rc('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 } },
+      rc(Field, { label: 'Type de problème' }, rc('select', { className: 'inp', value: f.type, onChange: e => up('type', e.target.value) }, RECL_TYPES.map(t => rc('option', { key: t, value: t }, t)))),
+      rc(Field, { label: 'Statut' }, rc('select', { className: 'inp', value: f.statut, onChange: e => up('statut', e.target.value) }, Object.keys(RECL_STATUTS).map(k => rc('option', { key: k, value: k }, RECL_STATUTS[k][0]))))),
+    rc(Field, { label: 'Description du problème', req: true }, rc('textarea', { className: 'inp', rows: 4, value: f.description, onChange: e => up('description', e.target.value), placeholder: 'Ex : remboursement CNSS refusé, dossier incomplet…' })),
+    rc(Field, { label: 'Suivi / résolution' }, rc('textarea', { className: 'inp', rows: 2, value: f.note || '', onChange: e => up('note', e.target.value), placeholder: 'Ce qui a été fait…' })));
+}
+function Reclamations() {
+  const { user, toast, logAction } = useApp();
+  const [, r] = useState(0);
+  const [modal, setModal] = useState(null);
+  const [fs, setFs] = useState('all');
+  const [ft, setFt] = useState('all');
+  const [q, setQ] = useState('');
+  const list = RECLAMATIONS.filter(x => (fs === 'all' || x.statut === fs) && (ft === 'all' || x.type === ft) && (!q || (x.patient_nom + ' ' + x.description).toLowerCase().includes(q.toLowerCase())));
+  const nbOpen = RECLAMATIONS.filter(x => x.statut !== 'resolue').length;
+  const setStatut = (x, s) => { const y = { ...x, statut: s, resolu_le: s === 'resolue' ? TODAY : '' }; RECLAMATIONS = RECLAMATIONS.map(z => z.id === x.id ? y : z); dbx.saveReclam(y); logAction('Statut réclamation', 'update', x.patient_nom + ' → ' + RECL_STATUTS[s][0], 'reclamation'); r(v => v + 1); };
+  const del = x => { if (!window.confirm('Supprimer cette réclamation ?')) return; RECLAMATIONS = RECLAMATIONS.filter(z => z.id !== x.id); dbx.deleteReclam(x.id); logAction('Suppression réclamation', 'delete', x.patient_nom + ' — ' + x.type, 'reclamation'); toast('Réclamation supprimée', 'success'); r(v => v + 1); };
+  const exp = () => downloadCSV('reclamations_' + TODAY + '.csv', [['Date', 'Heure', 'Patient', 'Type', 'Description', 'Statut', 'Suivi', 'Saisie par', 'Résolue le'], ...RECLAMATIONS.map(x => [ddmm(x.date), x.heure, x.patient_nom, x.type, x.description, RECL_STATUTS[x.statut]?.[0] || x.statut, x.note || '', userLabel(x.cree_par), x.resolu_le ? ddmm(x.resolu_le) : ''])]);
+  return rc('div', null,
+    rc('div', { className: 'card card-pad', style: { marginBottom: 12, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } },
+      rc('input', { className: 'inp', style: { maxWidth: 220 }, placeholder: 'Rechercher…', value: q, onChange: e => setQ(e.target.value) }),
+      rc('select', { className: 'inp', style: { maxWidth: 160 }, value: fs, onChange: e => setFs(e.target.value) }, rc('option', { value: 'all' }, 'Tous statuts'), Object.keys(RECL_STATUTS).map(k => rc('option', { key: k, value: k }, RECL_STATUTS[k][0]))),
+      rc('select', { className: 'inp', style: { maxWidth: 160 }, value: ft, onChange: e => setFt(e.target.value) }, rc('option', { value: 'all' }, 'Tous types'), RECL_TYPES.map(t => rc('option', { key: t, value: t }, t))),
+      rc('span', { style: { fontSize: 12.5, fontWeight: 600, color: nbOpen ? '#DC2626' : '#176B3A' } }, nbOpen + ' à traiter'),
+      rc('div', { style: { marginLeft: 'auto', display: 'flex', gap: 8 } }, rc(ExportBtn, { onClick: exp }), rc('button', { className: 'btn btn-pri', onClick: () => setModal({}) }, rc(Icon, { n: 'plus', size: 15 }), ' Nouvelle réclamation'))),
+    list.length === 0 ? rc(Empty, { icon: 'clipboard-off', msg: 'Aucune réclamation' }) :
+      rc('div', { className: 'card', style: { overflow: 'hidden' } }, rc('div', { className: 'tbl-scroll' }, rc('table', { className: 'tbl' },
+        rc('thead', null, rc('tr', null, ['Date', 'Patient', 'Type', 'Problème', 'Statut', 'Par', ''].map(h => rc('th', { key: h }, h)))),
+        rc('tbody', null, list.map(x => { const s = RECL_STATUTS[x.statut] || RECL_STATUTS.ouverte; return rc('tr', { key: x.id },
+          rc('td', { style: { whiteSpace: 'nowrap' } }, ddmm(x.date), rc('div', { className: 'muted', style: { fontSize: 11 } }, x.heure)),
+          rc('td', { style: { fontWeight: 600 } }, x.patient_nom),
+          rc('td', null, x.type),
+          rc('td', { style: { maxWidth: 320 } }, x.description, x.note && rc('div', { className: 'muted', style: { fontSize: 11.5, marginTop: 3 } }, '↳ ' + x.note)),
+          rc('td', null, rc('select', { value: x.statut, onChange: e => setStatut(x, e.target.value), style: { border: 'none', background: s[2], color: s[1], fontWeight: 700, fontSize: 12, padding: '4px 8px', borderRadius: 20 } }, Object.keys(RECL_STATUTS).map(k => rc('option', { key: k, value: k }, RECL_STATUTS[k][0])))),
+          rc('td', null, userLabel(x.cree_par)),
+          rc('td', { style: { whiteSpace: 'nowrap' } }, rc('button', { className: 'btn-ghost', title: 'Modifier', onClick: () => setModal(x) }, '✏️'), user.role === 'admin' && rc('button', { className: 'btn-ghost', title: 'Supprimer', onClick: () => del(x) }, '🗑️'))); }))))),
+    modal && rc(ReclamModal, { rec: modal.id ? modal : null, onClose: () => { setModal(null); r(v => v + 1); } }));
+}
+
+/* ── Export complet (un classeur Excel, une feuille par rubrique) ── */
+function exportAllData() {
+  try {
+    const wb = XLSX.utils.book_new();
+    const pn = id => { const p = PATIENTS.find(x => x.id === id); return p ? p.prenom + ' ' + p.nom : '(supprimé)'; };
+    const add = (name, rows) => {
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const n = rows[0].length, widths = [];
+      for (let c = 0; c < n; c++) { let m = 10; rows.forEach(rw => { const l = rw[c] == null ? 0 : String(rw[c]).length; if (l > m) m = l; }); widths.push({ wch: Math.min(m + 2, 45) }); }
+      ws['!cols'] = widths;
+      for (let c = 0; c < n; c++) { const ref = XLSX.utils.encode_cell({ r: 0, c }); if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '176B3A' } } }; }
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    };
+    const ageOf = d => d ? Math.floor((Date.now() - new Date(d).getTime()) / 31557600000) : '';
+    add('Patients', [['Nom', 'Prénom', 'Naissance', 'Âge', 'Genre', 'Téléphone', 'Email', 'Adresse', 'CIN', 'Mutuelle', 'À risque', 'Maladie', 'Allergie', 'Créé le'], ...PATIENTS.map(p => [p.nom, p.prenom, p.naissance, ageOf(p.naissance), p.genre, p.tel, p.email, p.adresse, p.cin, p.mutuelle, p.risque ? 'Oui' : 'Non', p.maladie, p.allergie, p.creele])]);
+    const pl = []; PLANS.forEach(p => (p.lignes || []).forEach(l => pl.push([pn(p.patient), ddmm(p.date), userLabel(p.praticien), p.statut, l.label || acteName(l.acte), l.dents, l.prix])));
+    add('Plans de traitement', [['Patient', 'Date plan', 'Praticien', 'Statut', 'Acte', 'Dents', 'Prix (MAD)'], ...pl]);
+    add('Encaissements', [['Date', 'Heure', 'Patient', 'Acte', 'Montant (MAD)', 'Mode', 'Saisi par', 'Note'], ...[...PAIEMENTS].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(p => [ddmm(p.date), p.heure || '', pn(p.patient), acteName(p.acte), p.montant, p.mode, userLabel(p.par), p.note])]);
+    add('Rendez-vous', [['Date', 'Heure', 'Patient', 'Praticien', 'Motif', 'Statut'], ...[...RDV].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(x => [ddmm(x.date), x.heure, pn(x.patient), userLabel(x.praticien), x.motif, x.statut])]);
+    add('Prothèses', [['Date', 'Patient', 'Acte', 'Dents', 'Prothésiste', 'Prix patient', 'Coût labo', 'Statut', 'Payé labo'], ...PROTH_TRAVAUX.map(t => [ddmm(t.date), pn(t.patient), pActeName(t.acte), t.dents, (PROTHESISTES.find(x => x.id === t.prothesiste) || {}).nom || '', t.prixPatient, t.coutLabo, t.statut, t.payeLabo ? 'Oui' : 'Non'])]);
+    add('Mutuelles', [['Date', 'Patient', 'Mutuelle', 'Montant (MAD)'], ...MUT_DECLAREES.map(m => [ddmm(m.date), m.patient ? pn(m.patient) : (m.patientNom || ''), m.mutuelle, m.montant])]);
+    add('Dépenses', [['Date', 'Catégorie', 'Description', 'Montant (MAD)', 'Saisi par'], ...DEPENSES.map(d => [ddmm(d.date), d.categorie, d.description, d.montant, userLabel(d.par)])]);
+    add('Pointage', [['Date', 'Utilisateur', 'Entrée', 'Sortie'], ...POINTAGES.map(p => [ddmm(p.date), userLabel(p.user_id), p.heure_entree, p.heure_sortie])]);
+    add('Réclamations', [['Date', 'Heure', 'Patient', 'Type', 'Description', 'Statut', 'Suivi', 'Saisi par', 'Résolue le'], ...RECLAMATIONS.map(x => [ddmm(x.date), x.heure, x.patient_nom, x.type, x.description, (RECL_STATUTS[x.statut] || [x.statut])[0], x.note, userLabel(x.cree_par), x.resolu_le ? ddmm(x.resolu_le) : ''])]);
+    add('Checklist tâches', [['Tâche', 'Liste', 'Assignée à', 'Fréquence', 'Date/début', 'Active'], ...CHK_TACHES.map(t => [t.titre, t.liste, userLabel(t.assignee), CHK_FREQ[t.freq], ddmm(t.date_debut), t.actif === false ? 'Non' : 'Oui'])]);
+    add('Checklist faites', [['Date', 'Tâche', 'Fait par', 'Fait le'], ...CHK_FAITS.map(f => [ddmm(f.date), (CHK_TACHES.find(t => t.id === f.tache_id) || {}).titre || '(supprimée)', userLabel(f.user_id), f.fait_le])]);
+    add('Historique', [['Date / heure', 'Utilisateur', 'Action', 'Détail'], ...HISTORIQUE.map(h => [h.t, userLabel(h.user), h.action, h.detail])]);
+    XLSX.writeFile(wb, 'dentixpert_sauvegarde_complete_' + TODAY + '.xlsx', { cellStyles: true });
+  } catch (e) { console.error(e); alert('Erreur export : ' + (e?.message || 'inconnue')); }
+}
+function ExportAll() {
+  return rc('div', { className: 'card card-pad' },
+    rc('div', { className: 'sec-title', style: { marginBottom: 8 } }, rc(Icon, { n: 'device-floppy', size: 18, color: '#176B3A' }), ' Sauvegarde complète'),
+    rc('p', { className: 'muted', style: { fontSize: 13, margin: '0 0 14px' } }, 'Un seul fichier Excel avec une feuille par rubrique : patients, plans de traitement, encaissements, rendez-vous, prothèses, mutuelles, dépenses, pointage, réclamations, checklist et historique.'),
+    rc(ExportBtn, { onClick: exportAllData, label: 'Télécharger toutes les données' }));
+}
+
+
 let POINTAGES = [];
 
 function Pointage() {
@@ -9029,7 +9341,7 @@ function Pointage() {
           myToday && /*#__PURE__*/React.createElement("div", { style:{color:'#888',fontSize:12,marginTop:2} },
             myToday.heure_entree ? '↓ Entrée '+myToday.heure_entree : '',
             myToday.heure_sortie ? '  ↑ Sortie '+myToday.heure_sortie : '',
-            myToday.heure_entree && myToday.heure_sortie ? '  ('+duree(myToday.heure_entree,myToday.heure_sortie)+')' : ''
+            ''
           )
         ),
         /*#__PURE__*/React.createElement("div", { style:{marginLeft:'auto',textAlign:'right'} },
@@ -9072,10 +9384,10 @@ function Pointage() {
         ),
         /*#__PURE__*/React.createElement(ExportBtn, {
           onClick: () => downloadCSV('pointage_'+TODAY+'.csv', [
-            ['Date','Utilisateur','Entrée','Sortie','Durée'],
+            ['Date','Utilisateur','Entrée','Sortie'],
             ...list.map(p=>{
               const u = USERS.find(x=>x.id===p.user_id);
-              return [p.date, u?(u.prenom+' '+u.nom):'?', p.heure_entree||'', p.heure_sortie||'', duree(p.heure_entree,p.heure_sortie)];
+              return [p.date, u?(u.prenom+' '+u.nom):'?', p.heure_entree||'', p.heure_sortie||''];
             })
           ])
         })
@@ -9089,8 +9401,7 @@ function Pointage() {
                   /*#__PURE__*/React.createElement("th", null, "Date"),
                   isAdmin && /*#__PURE__*/React.createElement("th", null, "Utilisateur"),
                   /*#__PURE__*/React.createElement("th", null, "Entrée"),
-                  /*#__PURE__*/React.createElement("th", null, "Sortie"),
-                  /*#__PURE__*/React.createElement("th", null, "Durée")
+                  /*#__PURE__*/React.createElement("th", null, "Sortie")
                 )
               ),
               /*#__PURE__*/React.createElement("tbody", null,
@@ -9110,9 +9421,6 @@ function Pointage() {
                     ),
                     /*#__PURE__*/React.createElement("td", null,
                       p.heure_sortie ? /*#__PURE__*/React.createElement("span", {style:{fontWeight:700,color:'#DC2626'}}, "↑ "+p.heure_sortie) : /*#__PURE__*/React.createElement("span", {className:"muted"}, "En cours…")
-                    ),
-                    /*#__PURE__*/React.createElement("td", null,
-                      /*#__PURE__*/React.createElement("span", {style:{fontWeight:600,color:'#3B82F6'}}, d)
                     )
                   );
                 })
@@ -9274,11 +9582,11 @@ function Settings() {
   });
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     className: "tabs"
-  }, [['users', 'Utilisateurs'], ['cabinet', 'Cabinet']].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
+  }, [['users', 'Utilisateurs'], ['cabinet', 'Cabinet'], ['export', 'Export des données']].map(([k, l]) => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: 'tab' + (tab === k ? ' on' : ''),
     onClick: () => setTab(k)
-  }, l))), tab === 'users' && /*#__PURE__*/React.createElement("div", {
+  }, l))), tab === 'export' && /*#__PURE__*/React.createElement(ExportAll, null), tab === 'users' && /*#__PURE__*/React.createElement("div", {
     className: "card",
     style: {
       overflow: 'hidden'
@@ -9867,6 +10175,8 @@ function App() {
     encaissements: 'finances',
     depenses: 'depenses',
     pointage: 'pointage',
+    checklist: 'settings_admin',
+    reclamations: 'reclamations',
     stats: 'stats',
     historique: 'historique',
     settings: 'settings_admin',
@@ -9900,7 +10210,7 @@ function App() {
   if (page.startsWith('patient:')) view = /*#__PURE__*/React.createElement(PatientDetail, {
     id: page.split(':')[1]  });else switch (page) {
     case 'dashboard':
-      view = /*#__PURE__*/React.createElement(Dashboard, null);
+      view = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TasksWidget, null), /*#__PURE__*/React.createElement(Dashboard, null));
       break;
     case 'patients':
       view = /*#__PURE__*/React.createElement(PatientsList, null);
@@ -9932,6 +10242,12 @@ function App() {
     case 'pointage':
       view = /*#__PURE__*/React.createElement(Pointage, null);
       break;
+    case 'checklist':
+      view = /*#__PURE__*/React.createElement(ChecklistPage, null);
+      break;
+    case 'reclamations':
+      view = /*#__PURE__*/React.createElement(Reclamations, null);
+      break;
     case 'stats':
       view = /*#__PURE__*/React.createElement(Stats, null);
       break;
@@ -9942,7 +10258,7 @@ function App() {
       view = /*#__PURE__*/React.createElement(Settings, null);
       break;
     default:
-      view = /*#__PURE__*/React.createElement(Dashboard, null);
+      view = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(TasksWidget, null), /*#__PURE__*/React.createElement(Dashboard, null));
   }
   return /*#__PURE__*/React.createElement(AppCtx.Provider, {
     value: ctx
